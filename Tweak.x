@@ -38,9 +38,7 @@ static __weak YTLocalPlaybackController *sharedPlaybackController = nil;
         
         NSLog(@"[YTPlaybackFix] Errore 14: Iniezione evento di retry sicura...");
         
-        // Riduciamo il delay a un valore impercettibile (0.05s) 
-        // o rimuoviamolo se il controller è già inizializzato.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             if (sharedPlaybackController) {
                 id responder = [sharedPlaybackController parentResponder];
                 if (responder) {
