@@ -1,0 +1,67 @@
+name: Build Tweak
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build YTPlaybackFix
+    runs-on: macos-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Setup Dependencies
+        run: brew install ldid xz
+
+      - name: Setup Theos
+        run: git clone --recursive https://github.com/theos/theos.git ${{ github.workspace }}/theos
+
+      - name: Setup iOS SDKs
+        run: |
+          rm -rf ${{ github.workspace }}/theos/sdks
+          git clone https://github.com/theos/sdks.git ${{ github.workspace }}/theos/sdks
+
+      - name: Build Package
+        run: |
+          make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+        env:
+          THEOS: ${{ github.workspace }}/theos
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p output
+          cp packages/*.deb output/
+          cp YTPlaybackFix.plist output/
+          
+          # Move the compiled dylib into the output folder for easy sideload access
+          if [ -f .theos/obj/YTPlaybackFix.dylib ]; then
+            cp .theos/obj/YTPlaybackFix.dylib output/
+          elif [ -f .theos/obj/debug/YTPlaybackFix.dylib ]; then
+            cp .theos/obj/debug/YTPlaybackFix.dylib output/
+          fi
+
+      - name: Generate Release Tag
+        id: tag
+        run: |
+          VERSION=$(grep '^Version:' control | awk '{print $2}')
+          echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: YTPlaybackFix ${{ steps.tag.outputs.version }}
+          files: output/*
+          make_latest: true
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
