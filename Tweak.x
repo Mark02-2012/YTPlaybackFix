@@ -1,52 +1,140 @@
 #import <UIKit/UIKit.h>
-#import <Foundation/Foundation.h>
 
-// Dichiarazione delle interfacce necessarie di YouTube per consentire la compilazione senza errori
-@interface YTWatchViewController : UIViewController
-- (id)currentVideoID;
-- (void)playVideoWithID:(id)videoID;
-@end
-
+// 1. Dichiariamo al compilatore tutti i metodi (reali o ipotetici) che useremo
 @interface YTPlayerViewController : UIViewController
 - (void)retryPlayback;
+- (void)reloadVideo;
+- (void)resetPlayer;
+- (void)playVideo;
+- (void)showError:(NSError *)error;
+- (void)showPlaybackError:(NSError *)error;
+- (void)setPlaybackError:(NSError *)error;
+- (void)playbackDidFailWithError:(NSError *)error;
+- (void)playerViewController:(id)arg1 playbackDidFailWithError:(NSError *)arg2;
+
+// Metodi custom che iniettiamo noi nella classe
+- (BOOL)isGoogleBlock:(NSError *)error;
+- (void)triggerCountermeasure;
 @end
+
 
 %hook YTPlayerViewController
 
-- (void)showPlaybackError:(NSError *)error {
-    // Verifichiamo se l'errore appartiene al dominio di riproduzione YouTube ed è il codice 14
-    if ([error.domain isEqualToString:@"com.google.ios.youtube.ErrorDomain.playback"] && error.code == 14) {
-        
-        NSLog(@"[YTPlaybackFix] Rilevato Errore 14 (Si è verificato un problema). Avvio ricaricamento automatico...");
-        
-        // Tentativo 1: Esegue il retry nativo (equivalente a premere nuovamente Play)
-        if ([self respondsToSelector:@selector(retryPlayback)]) {
-            [self retryPlayback];
-            NSLog(@"[YTPlaybackFix] Eseguito retryPlayback sul player.");
-        } else {
-            // Tentativo 2: Forza la re-inizializzazione del video risalendo al controller della vista
-            UIResponder *responder = self;
-            while (responder && ![responder isKindOfClass:%c(YTWatchViewController)]) {
-                responder = [responder nextResponder];
-            }
-            
-            if (responder) {
-                YTWatchViewController *watchVC = (YTWatchViewController *)responder;
-                id currentID = [watchVC currentVideoID];
-                
-                if (currentID) {
-                    NSLog(@"[YTPlaybackFix] Ricarico forzatamente il video con ID: %@", currentID);
-                    [watchVC playVideoWithID:currentID];
-                }
-            }
-        }
-        
-        // Interrompiamo l'esecuzione originale per evitare che compaia il popup nero di errore a schermo
-        return;
+// --- RETE 1: Il delegato classico ---
+- (void)playbackDidFailWithError:(NSError *)error {
+    if ([self isGoogleBlock:error]) {
+        [self triggerCountermeasure];
+        return; // Sopprime la chiamata originale (niente schermata nera)
     }
-
-    // Per qualsiasi altro tipo di errore, lasciamo che l'applicazione si comporti normalmente
     %orig;
 }
 
+// --- RETE 2: Il delegato moderno con sender ---
+- (void)playerViewController:(id)controller playbackDidFailWithError:(NSError *)error {
+    if ([self isGoogleBlock:error]) {
+        [self triggerCountermeasure];
+        return; 
+    }
+    %orig;
+}
+
+// --- RETE 3: Il setter della schermata d'errore ---
+- (void)setPlaybackError:(NSError *)error {
+    if ([self isGoogleBlock:error]) {
+        [self triggerCountermeasure];
+        return;
+    }
+    %orig;
+}
+
+// --- RETE 4: Chiamata diretta di rendering UI ---
+- (void)showError:(NSError *)error {
+    if ([self isGoogleBlock:error]) {
+        [self triggerCountermeasure];
+        return;
+    }
+    %orig;
+}
+
+// --- RETE 5: Variante Google del render UI ---
+- (void)showPlaybackError:(NSError *)error {
+    if ([self isGoogleBlock:error]) {
+        [self triggerCountermeasure];
+        return;
+    }
+    %orig;
+}
+
+
+// ==========================================
+// CERVELLO DEL BYPASS (Iniettato nella classe)
+// ==========================================
+
+%new
+- (BOOL)isGoogleBlock:(NSError *)error {
+    if (!error) return NO;
+
+    // Stampiamo l'identikit completo dell'errore nella console di sistema
+    NSLog(@"[YTPlaybackFix PRO] INTERCETTATO -> Domain: %@ | Code: %ld | Desc: %@", 
+          error.domain, (long)error.code, error.localizedDescription);
+
+    // -1009 = Dispositivo offline; -1001 = Reale timeout del modem
+    if (error.code == -1009 || error.code == -1001) {
+        NSLog(@"[YTPlaybackFix PRO] Errore di rete legittimo. Lascio passare.");
+        return NO;
+    }
+
+    return YES;
+}
+
+%new
+- (void)triggerCountermeasure {
+    static NSTimeInterval lastBypassTime = 0;
+    NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
+
+    // DEBOUNCER: Ignora le raffiche di errori per 2.0 secondi per evitare il freeze
+    if (now - lastBypassTime < 2.0) {
+        NSLog(@"[YTPlaybackFix PRO] Bypass in cooldown, ignoro richiesta...");
+        return;
+    }
+    lastBypassTime = now;
+
+    NSLog(@"[YTPlaybackFix PRO] 🛡️ CONTROMISURA ATTIVATA: Forzo il ricaricamento del flusso...");
+
+    // Ritardo di 0.5s per far chiudere i socket morti prima di riaprirli
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        
+        if ([self respondsToSelector:@selector(retryPlayback)]) {
+            NSLog(@"[YTPlaybackFix PRO] Comando: retryPlayback");
+            [self retryPlayback];
+        } 
+        else if ([self respondsToSelector:@selector(reloadVideo)]) {
+            NSLog(@"[YTPlaybackFix PRO] Comando: reloadVideo");
+            [self reloadVideo];
+        } 
+        else {
+            NSLog(@"[YTPlaybackFix PRO] Comando: Hard Reset");
+            if ([self respondsToSelector:@selector(resetPlayer)]) [self resetPlayer];
+            if ([self respondsToSelector:@selector(playVideo)]) [self playVideo];
+        }
+    });
+}
+
 %end
+
+
+// Costruttore statico di caricamento per LiveContainer
+__attribute__((constructor)) static void initYTPlaybackFix() {
+    NSLog(@"[YTPlaybackFix PRO] dylib caricata nel processo!");
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIViewController *root = [UIApplication sharedApplication].keyWindow.rootViewController;
+        if (root) {
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"YTPlaybackFix PRO"
+                                                                           message:@"L'hook a 5 reti è iniettato e attivo. Comincia a skippare! 🎣"
+                                                                    preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Daje" style:UIAlertActionStyleDefault handler:nil]];
+            [root presentViewController:alert animated:YES completion:nil];
+        }
+    });
+}
