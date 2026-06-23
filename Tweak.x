@@ -123,17 +123,28 @@
 %end
 
 
-// Costruttore statico di caricamento per LiveContainer
-__attribute__((constructor)) static void initYTPlaybackFix() {
-    NSLog(@"[YTPlaybackFix PRO] dylib caricata nel processo!");
-
+// 4. Costruttore statico: si avvia da solo appena l'app viene aperta in LiveContainer
+__attribute__((constructor)) static void initYTFix() {
+    NSLog(@"[YTPlaybackFix] Tweak caricato in memoria con successo!");
+    
+    // Questo popup conferma al 100% che LiveContainer sta leggendo la dylib!
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        UIViewController *root = [UIApplication sharedApplication].keyWindow.rootViewController;
+        
+        UIWindow *activeWindow = nil;
+        // Metodo moderno per iOS 13+ per recuperare la finestra attiva senza errori di compilazione
+        for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState == UISceneActivationStateForegroundActive) {
+                activeWindow = scene.windows.firstObject;
+                break;
+            }
+        }
+        
+        UIViewController *root = activeWindow.rootViewController;
         if (root) {
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"YTPlaybackFix PRO"
-                                                                           message:@"L'hook a 5 reti è iniettato e attivo. Comincia a skippare! 🎣"
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"YTPlaybackFix v2"
+                                                                           message:@"Codice avanzato iniettato. Il tweak è in ascolto degli errori di rete e pronto all'auto-retry."
                                                                     preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"Daje" style:UIAlertActionStyleDefault handler:nil]];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Inizia il test" style:UIAlertActionStyleDefault handler:nil]];
             [root presentViewController:alert animated:YES completion:nil];
         }
     });
