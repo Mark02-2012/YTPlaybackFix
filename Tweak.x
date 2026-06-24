@@ -1,61 +1,70 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 
-// Definiamo le interfacce per evitare errori di compilazione
+// --- Interfacce ---
 @interface YTPlayerTapToRetryResponderEvent : NSObject
 + (id)eventWithFirstResponder:(id)arg1;
 - (void)send;
 @end
 
-@interface YTLocalPlaybackController : NSObject
+@interface YTSingleVideoController : NSObject
 - (id)parentResponder;
 @end
 
-// Variabile statica per tenere traccia del controller
-static __weak YTLocalPlaybackController *sharedPlaybackController = nil;
+@interface MLHAMQueuePlayer : NSObject
+@property (nonatomic, weak) id delegate;
+- (NSInteger)state;
+@end
 
-%hook YTLocalPlaybackController
+// --- Variabile di sicurezza (Anti-Spam) ---
+static NSDate *lastRetryTime = nil;
 
-- (id)init {
-    id instance = %orig;
-    sharedPlaybackController = instance;
-    return instance;
+static void performRetry(id responder) {
+    if (!responder) return;
+    
+    // Evita di inviare più di un retry ogni 3 secondi (fondamentale per non essere bannati dai server)
+    if (lastRetryTime && [[NSDate date] timeIntervalSinceDate:lastRetryTime] < 3.0) {
+        return;
+    }
+    lastRetryTime = [NSDate date];
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        id event = [%c(YTPlayerTapToRetryResponderEvent) eventWithFirstResponder:responder];
+        if (event) {
+            [event send];
+            NSLog(@"[YTPlaybackFix] Retry inviato con successo!");
+        }
+    });
 }
 
-// Assicuriamoci che venga aggiornato se il controller cambia
-- (void)play {
-    sharedPlaybackController = self;
+// --- Hook 1: Motore (Playback Engine) ---
+%hook MLHAMQueuePlayer
+
+- (void)setState:(NSInteger)state {
     %orig;
+    
+    // Stati 5, 6, 8 = Blocchi/Errori critici
+    if (state == 5 || state == 6 || state == 8) {
+        id delegate = [self delegate];
+        if ([delegate respondsToSelector:@selector(parentResponder)]) {
+            performRetry([delegate parentResponder]);
+        }
+    }
 }
 
 %end
 
-%hook NSError
+// --- Hook 2: UI (Gestione Alert Errore 14) ---
+%hook YTSingleVideoController
 
-- (id)initWithDomain:(NSString *)domain code:(NSInteger)code userInfo:(NSDictionary *)dict {
-    // Intercettiamo l'errore 14
-    if ([domain isEqualToString:@"com.google.ios.youtube.ErrorDomain.playback"] && code == 14) {
-        
-        NSLog(@"[YTPlaybackFix] Errore 14: Iniezione evento di retry sicura...");
-        
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 0.5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            // Usiamo il responder salvato dal nostro hook, senza cercare finestre o keyWindow
-            if (sharedPlaybackController) {
-                id responder = [sharedPlaybackController parentResponder];
-                if (responder) {
-                    // Creiamo l'evento esattamente come fa YTUHD
-                    id event = [%c(YTPlayerTapToRetryResponderEvent) eventWithFirstResponder:responder];
-                    if (event) {
-                        [event send];
-                        NSLog(@"[YTPlaybackFix] Evento di Retry inviato correttamente!");
-                    }
-                }
-            }
-        });
-        
-        return %orig;
+- (void)showErrorAlertWithError:(id)arg1 {
+    %orig; // Importante: chiamiamo l'originale per non rompere la catena logica dell'app
+    
+    NSLog(@"[YTPlaybackFix] Errore UI rilevato, tentativo di retry automatico...");
+    
+    if ([self respondsToSelector:@selector(parentResponder)]) {
+        performRetry([self parentResponder]);
     }
-    return %orig;
 }
 
 %end
