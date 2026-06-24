@@ -16,6 +16,22 @@
 @end
 
 static NSTimeInterval gLastRetry = 0;
+static CGFloat gLatestTime = 0.0;
+
+%hook YTPlayerViewController
+
+- (CGFloat)currentVideoMediaTime
+{
+    CGFloat t = %orig;
+
+    if (t > gLatestTime) {
+        gLatestTime = t;
+    }
+
+    return t;
+}
+
+%end
 
 %hook YTMainAppVideoPlayerOverlayViewController
 
@@ -39,13 +55,8 @@ static NSTimeInterval gLastRetry = 0;
             pvc = [self parentViewController];
         } @catch (...) {}
 
-        CGFloat oldTime = 0.0;
-
-        if (pvc) {
-            @try {
-                oldTime = [pvc currentVideoMediaTime];
-            } @catch (...) {}
-        }
+        // usa il timestamp aggiornato continuamente
+        CGFloat savedTime = gLatestTime;
 
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                        (int64_t)(0.15 * NSEC_PER_SEC)),
@@ -71,14 +82,12 @@ static NSTimeInterval gLastRetry = 0;
 
             if (pvc) {
 
-                CGFloat targetTime = oldTime + 0.75;
-
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                (int64_t)(0.35 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
 
                     @try {
-                        [pvc seekToTime:targetTime];
+                        [pvc seekToTime:savedTime];
                     } @catch (...) {}
 
                 });
