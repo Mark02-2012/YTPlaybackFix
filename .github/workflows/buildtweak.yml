@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+        with: 
+          ref: beta-testing
 
       - name: Setup Dependencies
         run: brew install ldid xz
