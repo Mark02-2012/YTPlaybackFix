@@ -9,6 +9,7 @@
 @interface YTPlayerViewController : UIViewController
 - (CGFloat)currentVideoMediaTime;
 - (void)seekToTime:(CGFloat)time;
+- (void)replay;
 @end
 
 @interface YTMainAppVideoPlayerOverlayViewController : UIViewController
@@ -24,7 +25,7 @@ static CGFloat gLatestTime = 0.0;
 {
     CGFloat t = %orig;
 
-    // Aggiorna SEMPRE il tempo reale
+    // Aggiorna sempre il timestamp reale
     gLatestTime = t;
 
     return t;
@@ -32,8 +33,7 @@ static CGFloat gLatestTime = 0.0;
 
 - (void)seekToTime:(CGFloat)time
 {
-    // Aggiorna immediatamente quando l'utente
-    // va avanti o indietro nella timeline
+    // Aggiorna subito se l'utente usa la timeline
     gLatestTime = time;
 
     %orig;
@@ -66,7 +66,7 @@ static CGFloat gLatestTime = 0.0;
         CGFloat savedTime = gLatestTime;
 
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                       (int64_t)(0.15 * NSEC_PER_SEC)),
+                       (int64_t)(0.10 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
 
             id responder = nil;
@@ -78,6 +78,7 @@ static CGFloat gLatestTime = 0.0;
             } @catch (...) {}
 
             if (responder) {
+
                 id event =
                     [%c(YTPlayerTapToRetryResponderEvent)
                         eventWithFirstResponder:responder];
@@ -90,12 +91,22 @@ static CGFloat gLatestTime = 0.0;
             if (pvc) {
 
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                               (int64_t)(0.35 * NSEC_PER_SEC)),
+                               (int64_t)(0.20 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
 
                     @try {
                         [pvc seekToTime:savedTime];
                     } @catch (...) {}
+
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                   (int64_t)(0.10 * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+
+                        @try {
+                            [pvc replay];
+                        } @catch (...) {}
+
+                    });
 
                 });
             }
