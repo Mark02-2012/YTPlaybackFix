@@ -18,6 +18,7 @@
 
 static NSTimeInterval gLastRetry = 0;
 static CGFloat gLatestTime = 0.0;
+static int gBurstCount = 1; // Contatore per i recovery consecutivi
 
 %hook YTPlayerViewController
 
@@ -51,7 +52,15 @@ static CGFloat gLatestTime = 0.0;
     {
         NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 
-        if (now - gLastRetry < 1.5) {
+        if (now - gLastRetry < 1) { // Controlla se è una raffica di errori
+            gBurstCount++;
+        } else {
+            gBurstCount = 1; // Resetta il contatore se è un nuovo evento
+        }
+
+        if (gBurstCount > 2) {
+            // Lasciamo che il player gestisca l'evento come farebbe normalmente
+            %orig;
             return;
         }
 
@@ -101,9 +110,49 @@ static CGFloat gLatestTime = 0.0;
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                    (int64_t)(0.10 * NSEC_PER_SEC)),
                                    dispatch_get_main_queue(), ^{
-
                         @try {
                             [pvc replay];
+
+                            // Variabile locale per il retry di emergenza
+                            bool emergenceRetryDone = false;
+
+                            // Controllo di emergenza dopo 0.35 secondi
+                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                           (int64_t)(0.35 * NSEC_PER_SEC)),
+                                           dispatch_get_main_queue(), ^{
+                                CGFloat currentTime = [pvc currentVideoMediaTime];
+                                if (fabs(currentTime - savedTime) < 0.1) { // Controllo più robusto
+                                    // Riprova una volta più se non si è riprodotto abbastanza
+                                    if (!emergenceRetryDone) {
+                                        emergenceRetryDone = true; // Imposta il flag
+
+                                        id eventRetry =
+                                            [%c(YTPlayerTapToRetryResponderEvent)
+                                                eventWithFirstResponder:responder];
+
+                                        if (eventRetry) {
+                                            [eventRetry send];
+                                        }
+
+                                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                                       (int64_t)(0.20 * NSEC_PER_SEC)),
+                                                       dispatch_get_main_queue(), ^{
+
+                                            @try {
+                                                [pvc seekToTime:savedTime];
+                                            } @catch (...) {}
+
+                                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                                           (int64_t)(0.10 * NSEC_PER_SEC)),
+                                                           dispatch_get_main_queue(), ^{
+                                                @try {
+                                                    [pvc replay];
+                                                } @catch (...) {}
+                                            });
+                                        }
+                                    }
+                                }
+                            });
                         } @catch (...) {}
 
                     });
@@ -124,4 +173,5 @@ static CGFloat gLatestTime = 0.0;
 {
     gLatestTime = 0.0;
     gLastRetry = 0;
+    gBurstCount = 1; // Inizializza il contatore dei recovery consecutivi
 }
