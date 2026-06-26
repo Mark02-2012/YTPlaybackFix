@@ -1,7 +1,7 @@
 Package: com.mark02-2012.ytplaybackfix
 Name: YTPlaybackFix
 Depends: mobilesubstrate
-Version: 0.2.2b1
+Version: 0.2.2b2
 Architecture: iphoneos-arm
 Description: Fix YouTube playback "something went wrong" error (Code 14) automatically.
 Maintainer: Mark02-2012
