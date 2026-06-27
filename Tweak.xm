@@ -19,6 +19,7 @@
 static NSTimeInterval gLastRetry = 0;
 static CGFloat gLatestTime = 0.0;
 static int gBurstCount = 1; // Contatore per i recovery consecutivi
+static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di emergenza
 
 %hook YTPlayerViewController
 
@@ -77,7 +78,6 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                        (int64_t)(0.10 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-
             id responder = nil;
 
             @try {
@@ -87,7 +87,6 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
             } @catch (...) {}
 
             if (responder) {
-
                 id event =
                     [%c(YTPlayerTapToRetryResponderEvent)
                         eventWithFirstResponder:responder];
@@ -98,11 +97,9 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
             }
 
             if (pvc) {
-
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                (int64_t)(0.20 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
-
                     @try {
                         [pvc seekToTime:savedTime];
                     } @catch (...) {}
@@ -113,19 +110,15 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
                         @try {
                             [pvc replay];
 
-                            // Variabile locale per il retry di emergenza
-                            bool emergenceRetryDone = false;
+                            // Controllo di emergenza
+                            if (!gEmergencyCheckRunning) {
+                                gEmergencyCheckRunning = true;
 
-                            // Controllo di emergenza dopo 0.35 secondi
-                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                           (int64_t)(0.35 * NSEC_PER_SEC)),
-                                           dispatch_get_main_queue(), ^{
-                                CGFloat currentTime = [pvc currentVideoMediaTime];
-                                if (fabs(currentTime - savedTime) < 0.1) { // Controllo più robusto
-                                    // Riprova una volta più se non si è riprodotto abbastanza
-                                    if (!emergenceRetryDone) {
-                                        emergenceRetryDone = true; // Imposta il flag
-
+                                dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                               (int64_t)(0.35 * NSEC_PER_SEC)),
+                                               dispatch_get_main_queue(), ^{
+                                    CGFloat currentTime = [pvc currentVideoMediaTime];
+                                    if (fabs(currentTime - savedTime) < 0.1) { // Controllo più robusto
                                         id eventRetry =
                                             [%c(YTPlayerTapToRetryResponderEvent)
                                                 eventWithFirstResponder:responder];
@@ -137,7 +130,6 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
                                         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                                        (int64_t)(0.20 * NSEC_PER_SEC)),
                                                        dispatch_get_main_queue(), ^{
-
                                             @try {
                                                 [pvc seekToTime:savedTime];
                                             } @catch (...) {}
@@ -151,12 +143,12 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
                                             });
                                         }
                                     }
-                                }
-                            });
+
+                                    gEmergencyCheckRunning = false; // Resetta il flag globale
+                                });
+                            }
                         } @catch (...) {}
-
                     });
-
                 });
             }
         });
@@ -174,4 +166,5 @@ static int gBurstCount = 1; // Contatore per i recovery consecutivi
     gLatestTime = 0.0;
     gLastRetry = 0;
     gBurstCount = 1; // Inizializza il contatore dei recovery consecutivi
+    gEmergencyCheckRunning = false; // Inizializza il flag globale del controllo di emergenza
 }
