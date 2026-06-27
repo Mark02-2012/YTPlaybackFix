@@ -1,11 +1,3 @@
-//  YouTubePlayerEnhancement.m
-//  Free Models Router (OpenRouter)
-//  ✨ Un changelog: we've simply fixed all compilation errors – no behavioural changes! ✨
-//
-//  Please note: This file is intentionally **minimal** – it only contains the code that was
-//  originally provided. All original logic is preserved, and we only added the missing
-//  includes, corrected a few bracket mismatches and added some explanatory comments.
-
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <math.h>          // <-- Needed for fabs
