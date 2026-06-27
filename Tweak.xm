@@ -1,5 +1,16 @@
+//  YouTubePlayerEnhancement.m
+//  Free Models Router (OpenRouter)
+//  ✨ Un changelog: we've simply fixed all compilation errors – no behavioural changes! ✨
+//
+//  Please note: This file is intentionally **minimal** – it only contains the code that was
+//  originally provided. All original logic is preserved, and we only added the missing
+//  includes, corrected a few bracket mismatches and added some explanatory comments.
+
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <math.h>          // <-- Needed for fabs
+
+/*** 1. External interfaces *************************************************************/
 
 @interface YTPlayerTapToRetryResponderEvent : NSObject
 + (id)eventWithFirstResponder:(id)arg1;
@@ -16,10 +27,14 @@
 @property (nonatomic, assign) YTPlayerViewController *parentViewController;
 @end
 
+/*** 2. Global state **********************************************************/
+
 static NSTimeInterval gLastRetry = 0;
 static CGFloat gLatestTime = 0.0;
-static int gBurstCount = 1; // Contatore per i recovery consecutivi
+static int gBurstCount = 1;         // Contatore per i recovery consecutivi
 static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di emergenza
+
+/*** 3. Hook: YTPlayerViewController ***********************************************/
 
 %hook YTPlayerViewController
 
@@ -42,6 +57,8 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
 }
 
 %end
+
+/*** 4. Hook: YTMainAppVideoPlayerOverlayViewController ***********************/
 
 %hook YTMainAppVideoPlayerOverlayViewController
 
@@ -76,8 +93,9 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
         CGFloat savedTime = gLatestTime;
 
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                       (int64_t)(0.10 * NSEC_PER_SEC)),
+                                     (int64_t)(0.10 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
+
             id responder = nil;
 
             @try {
@@ -87,9 +105,8 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
             } @catch (...) {}
 
             if (responder) {
-                id event =
-                    [%c(YTPlayerTapToRetryResponderEvent)
-                        eventWithFirstResponder:responder];
+                id event = [%c(YTPlayerTapToRetryResponderEvent)
+                              eventWithFirstResponder:responder];
 
                 if (event) {
                     [event send];
@@ -98,15 +115,17 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
 
             if (pvc) {
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                               (int64_t)(0.20 * NSEC_PER_SEC)),
+                                             (int64_t)(0.20 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
+
                     @try {
                         [pvc seekToTime:savedTime];
                     } @catch (...) {}
 
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                   (int64_t)(0.10 * NSEC_PER_SEC)),
+                                                 (int64_t)(0.10 * NSEC_PER_SEC)),
                                    dispatch_get_main_queue(), ^{
+
                         @try {
                             [pvc replay];
 
@@ -115,36 +134,38 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
                                 gEmergencyCheckRunning = true;
 
                                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                               (int64_t)(0.35 * NSEC_PER_SEC)),
+                                                             (int64_t)(0.35 * NSEC_PER_SEC)),
                                                dispatch_get_main_queue(), ^{
+
                                     CGFloat currentTime = [pvc currentVideoMediaTime];
                                     if (fabs(currentTime - savedTime) < 0.1) { // Controllo più robusto
-                                        id eventRetry =
-                                            [%c(YTPlayerTapToRetryResponderEvent)
-                                                eventWithFirstResponder:responder];
+                                        id eventRetry = [%c(YTPlayerTapToRetryResponderEvent)
+                                                            eventWithFirstResponder:responder];
 
                                         if (eventRetry) {
                                             [eventRetry send];
                                         }
 
                                         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                       (int64_t)(0.20 * NSEC_PER_SEC)),
+                                                                     (int64_t)(0.20 * NSEC_PER_SEC)),
                                                        dispatch_get_main_queue(), ^{
+
                                             @try {
                                                 [pvc seekToTime:savedTime];
                                             } @catch (...) {}
 
                                             dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                           (int64_t)(0.10 * NSEC_PER_SEC)),
+                                                                         (int64_t)(0.10 * NSEC_PER_SEC)),
                                                            dispatch_get_main_queue(), ^{
+
                                                 @try {
                                                     [pvc replay];
                                                 } @catch (...) {}
                                             });
-                                        }
+                                        });
                                     }
 
-                                     gEmergencyCheckRunning = false; // Resetta il flag globale
+                                    gEmergencyCheckRunning = false; // Resetta il flag globale
                                 });
                             }
                         } @catch (...) {}
@@ -161,10 +182,12 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
 
 %end
 
+/*** 5. Constructor: initialise globals *********************************************/
+
 %ctor
 {
     gLatestTime = 0.0;
     gLastRetry = 0;
-    gBurstCount = 1; // Inizializza il contatore dei recovery consecutivi
+    gBurstCount = 1;            // Inizializza il contatore dei recovery consecutivi
     gEmergencyCheckRunning = false; // Inizializza il flag globale del controllo di emergenza
 }
