@@ -144,8 +144,7 @@ static bool gEmergencyCheckRunning = false; // Flag globale per il controllo di 
                                         }
                                     }
 
-                                      gEmergencyCheckRunning = false; // Resetta il flag globale
-                                    }
+                                     gEmergencyCheckRunning = false; // Resetta il flag globale
                                 });
                             }
                         } @catch (...) {}
