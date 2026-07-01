@@ -1,9 +1,7 @@
-// Test 0.2.2 Stable 
+// test 0.2.2 
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>   // per %c()
-#import <math.h>           // per fabs()
 
 /*** 1. Interfacce esterne *************************************************************/
 
@@ -20,18 +18,15 @@
 
 @interface YTMainAppVideoPlayerOverlayViewController : UIViewController
 @property (nonatomic, assign) YTPlayerViewController *parentViewController;
-- (CGFloat)currentPlaybackRate;
-- (void)setPlaybackRate:(CGFloat)rate;
 @end
 
 /*** 2. Stato globale ******************************************************************/
 
 static NSTimeInterval gLastRetry = 0;
 static CGFloat gLatestTime = 0.0;
-static int gBurstCount = 1;
-static bool gEmergencyCheckRunning = false;
+static int gBurstCount = 1;         // Contatore per i recovery consecutivi
 
-/*** 3. Hook: YTPlayerViewController **************************************************/
+/*** 3. Hook: YTPlayerViewController ***********************************************/
 
 %hook YTPlayerViewController
 
@@ -79,8 +74,6 @@ static bool gEmergencyCheckRunning = false;
         @try { pvc = [self parentViewController]; } @catch (...) {}
 
         CGFloat savedTime = gLatestTime;
-        CGFloat savedPlaybackRate = 1.0;          // default sicuro
-        @try { savedPlaybackRate = [self currentPlaybackRate]; } @catch (...) {}
 
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                      (int64_t)(0.10 * NSEC_PER_SEC)),
@@ -104,60 +97,18 @@ static bool gEmergencyCheckRunning = false;
                                              (int64_t)(0.20 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
 
-                    @try { [pvc seekToTime:savedTime]; } @catch (...) {}
+                    @try {
+                        [pvc seekToTime:savedTime];
+                    } @catch (...) {}
 
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                                  (int64_t)(0.10 * NSEC_PER_SEC)),
                                    dispatch_get_main_queue(), ^{
 
-                        @try { [pvc replay]; } @catch (...) {}
+                        @try {
+                            [pvc replay];
+                        } @catch (...) {}
 
-                        // --- Ripristino playback-rate dopo il replay -----------------
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                     (int64_t)(0.15 * NSEC_PER_SEC)),
-                                       dispatch_get_main_queue(), ^{
-                            @try { [self setPlaybackRate:savedPlaybackRate]; } @catch (...) {}
-                        });
-                        // -------------------------------------------------------------
-
-                        // Controllo di emergenza (modificato: 1.00 secondi)
-                        if (!gEmergencyCheckRunning) {
-                            gEmergencyCheckRunning = true;
-
-                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                         (int64_t)(1.00 * NSEC_PER_SEC)),   // ← 0.80 → 1.00
-                                           dispatch_get_main_queue(), ^{
-
-                                CGFloat currentTime = [pvc currentVideoMediaTime];
-                                // Controllo modificato: currentTime <= savedTime + 0.05
-                                if (currentTime <= savedTime + 0.05) {   // ← fabs(...) < 0.1 → nuova logica
-                                    id eventRetry = [%c(YTPlayerTapToRetryResponderEvent)
-                                                         eventWithFirstResponder:responder];
-                                    if (eventRetry) { [eventRetry send]; }
-
-                                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                                 (int64_t)(0.20 * NSEC_PER_SEC)),
-                                                   dispatch_get_main_queue(), ^{
-                                        @try { [pvc seekToTime:savedTime]; } @catch (...) {}
-
-                                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                                     (int64_t)(0.10 * NSEC_PER_SEC)),
-                                                       dispatch_get_main_queue(), ^{
-                                            @try { [pvc replay]; } @catch (...) {}
-
-                                            // Ripristino rate anche dopo retry di emergenza
-                                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                                                         (int64_t)(0.15 * NSEC_PER_SEC)),
-                                                           dispatch_get_main_queue(), ^{
-                                                @try { [self setPlaybackRate:savedPlaybackRate]; } @catch (...) {}
-                                            });
-                                        });
-                                    });
-                                }
-
-                                gEmergencyCheckRunning = false;
-                            });
-                        }
                     });
                 });
             }
@@ -178,5 +129,4 @@ static bool gEmergencyCheckRunning = false;
     gLatestTime = 0.0;
     gLastRetry = 0;
     gBurstCount = 1;
-    gEmergencyCheckRunning = false;
 }
