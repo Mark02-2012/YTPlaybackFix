@@ -53,7 +53,7 @@ static bool gEmergencyCheckRunning = false;
 {
     if (error &&
         [error.domain isEqualToString:@"com.google.ios.youtube.ErrorDomain.playback"] &&
-        error.code == 14)
+        (error.code == 14 || error.code == 0))
     {
         NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
 
