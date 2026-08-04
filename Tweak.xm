@@ -1,4 +1,3 @@
-#import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
@@ -21,9 +20,9 @@
 
 /*** 2. Stato globale ******************************************************************/
 
-static NSTimeInterval gLastRetry = 0;
-static CGFloat gLatestTime = 0.0;
-static int gBurstCount = 1;
+static CGFloat gTime;
+static CGFloat gSavedTime;
+static BOOL gIsTimeToRetry = NO;
 static bool gEmergencyCheckRunning = false;
 
 /*** 3. Hook: YTPlayerViewController ***********************************************/
@@ -31,15 +30,16 @@ static bool gEmergencyCheckRunning = false;
 %hook YTPlayerViewController
 
 - (CGFloat)currentVideoMediaTime
-{
-    CGFloat t = %orig;
-    gLatestTime = t;
-    return t;
-}
+    {
+        CGFloat currentVideoMediaTime = %orig;
+        gTime = currentVideoMediaTime;
+        gSavedTime = gTime;
+        return currentVideoMediaTime;
+    }
 
 - (void)seekToTime:(CGFloat)time
 {
-    gLatestTime = time;
+     gSavedTime = gTime;
     %orig;
 }
 
@@ -50,30 +50,23 @@ static bool gEmergencyCheckRunning = false;
 %hook YTMainAppVideoPlayerOverlayViewController
 
 - (void)handleError:(NSError *)error
-{
+{ 
+
+// Anti-loop new logic
+if (gIsTimeToRetry) {
+    %orig;
+    return;
+}
     if (error &&
         [error.domain isEqualToString:@"com.google.ios.youtube.ErrorDomain.playback"] &&
         (error.code == 14 || error.code == 0))
     {
-        NSTimeInterval now = [[NSDate date] timeIntervalSince1970];
-
-        if (now - gLastRetry < 1) { // anti-loop
-            gBurstCount++;
-        } else {
-            gBurstCount = 1;
-        }
-
-        if (gBurstCount > 2) {
-            %orig;
-            return;
-        }
-
-        gLastRetry = now;
+          gIsTimeToRetry = YES;
 
         YTPlayerViewController *pvc = nil;
         @try { pvc = [self parentViewController]; } @catch (...) {}
 
-        CGFloat savedTime = gLatestTime;
+        CGFloat savedTime = gSavedTime;
 
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                      (int64_t)(0.10 * NSEC_PER_SEC)),
@@ -97,7 +90,7 @@ static bool gEmergencyCheckRunning = false;
                                              (int64_t)(0.20 * NSEC_PER_SEC)),
                                dispatch_get_main_queue(), ^{
 
-                    @try { [pvc seekToTime:savedTime]; } @catch (...) {}
+                    @try { [pvc seekToTime:gSavedTime]; } @catch (...) {}
 
                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                                  (int64_t)(0.10 * NSEC_PER_SEC)),
@@ -130,14 +123,18 @@ static bool gEmergencyCheckRunning = false;
                                         if (emergencyEvent) { [emergencyEvent send]; }
                                     }
 
-                                    @try { [pvc seekToTime:savedTime]; } @catch (...) {}
+                                    @try { [pvc seekToTime:gSavedTime]; } @catch (...) {}
 
                                     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
                                                                  (int64_t)(0.20 * NSEC_PER_SEC)),
                                                dispatch_get_main_queue(), ^{
                                         @try { [pvc replay]; } @catch (...) {} // replay di emergenza
+                                         gIsTimeToRetry = NO;
                                         // Fine - nessun altro retry
+                            
                                     });
+                                     } else { 
+                                         gIsTimeToRetry = NO;
                                 }
 
                                 gEmergencyCheckRunning = false;
@@ -154,14 +151,15 @@ static bool gEmergencyCheckRunning = false;
     %orig;
 }
 
+
 %end
 
 /*** 5. Costruttore ********************************************************************/
 
 %ctor
 {
-    gLatestTime = 0.0;
-    gLastRetry = 0;
-    gBurstCount = 1;
+    gSavedTime = 0;
+    gTime = 0.0;
+    gIsTimeToRetry = NO;
     gEmergencyCheckRunning = false;
 }
