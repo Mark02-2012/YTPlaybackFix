@@ -27,20 +27,8 @@ jobs:
 
       - name: Clone YouTubeHeader
         run: |
-          if [ -d "${{ github.workspace }}/theos/include/YouTubeHeader" ]; then
-            cd ${{ github.workspace }}/theos/include/YouTubeHeader && git pull
-          else
-            cd ${{ github.workspace }}/theos/include && git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git
-          fi
-
-      - name: Debug YouTubeHeader
-        run: |
-          echo "THEOS=$THEOS"
-          echo "Workspace=${{ github.workspace }}"
-          echo "YouTubeHeader:"
-          find "${{ github.workspace }}/theos/include/YouTubeHeader" -maxdepth 1 -name "GPB*" -print
-          echo "GPBMessage locations:"
-          find "${{ github.workspace }}" -name "GPBMessage.h" -print
+          git clone --depth=1 https://github.com/PoomSmart/YouTubeHeader.git \
+          ${{ github.workspace }}/theos/include/YouTubeHeader
 
       - name: Build Package
         run: |
