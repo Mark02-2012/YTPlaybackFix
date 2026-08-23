@@ -1,8 +1,7 @@
-/*0.2.2*/
-
+/* Refresh.xm (my method, from YTPlaybackFix 0.2.2) */
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
+#import <objc.runtime.h>
 
 /*** 1. external interfaces ***/
 
@@ -27,7 +26,16 @@ static CGFloat gLatestTime = 0.0;
 static BOOL gIsTimeToRetry = NO;
 static bool gEmergencyCheckRunning = false;
 
-/*** 3. Hook: YTPlayerViewController ***/
+/*** 3. Helper: refresh enabled ***/
+
+static BOOL YTPlaybackFixRefreshEnabled(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if (![defaults objectForKey:@"YTPlaybackFixRefreshEnabled"])
+        return YES;
+    return [defaults boolForKey:@"YTPlaybackFixRefreshEnabled"];
+}
+
+/*** 4. Hook: YTPlayerViewController ***/
 
 %hook YTPlayerViewController
 
@@ -46,12 +54,17 @@ static bool gEmergencyCheckRunning = false;
 
 %end
 
-/*** 4. Hook: YTMainAppVideoPlayerOverlayViewController ***/
+/*** 5. Hook: YTMainAppVideoPlayerOverlayViewController ***/
 
 %hook YTMainAppVideoPlayerOverlayViewController
 
 - (void)handleError:(NSError *)error
 {
+    if (!YTPlaybackFixRefreshEnabled()) {
+        %orig;
+        return;
+    }
+
     if (gIsTimeToRetry) {
         %orig;
         return;
