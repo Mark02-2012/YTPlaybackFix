@@ -4,7 +4,6 @@
 #import <UIKit/UIKit.h>
 
 #import <YouTubeHeader/YTSettingsGroupData.h>
-#import <YouTubeHeader/YTAppSettingsPresentationData.h>
 #import <YouTubeHeader/YTSettingsSectionItem.h>
 #import <YouTubeHeader/YTSettingsSectionItemManager.h>
 #import <YouTubeHeader/YTSettingsViewController.h>
@@ -134,6 +133,24 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 
     Class YTSettingsSectionItemClass = %c(YTSettingsSectionItem);
 
+
+    /* ------------------------------------------------------------------------
+     * Version
+     * ---------------------------------------------------------------------- */
+
+    YTSettingsSectionItem *version =
+    [Item itemWithTitle:@"YTPlaybackFix v1.0test by Mark02-2012"
+       titleDescription:nil
+accessibilityIdentifier:nil
+        detailTextBlock:nil
+            selectBlock:^BOOL (YTSettingsCell *cell,
+                               NSUInteger arg1) {
+
+        return NO;
+
+    }];
+
+    [sectionItems addObject:version];
 
     /* ------------------------------------------------------------------------
      * Refresh
