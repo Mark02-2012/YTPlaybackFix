@@ -1,6 +1,8 @@
+/* YouFixPlaybackIssues.xm */
 #import <UIKit/UIKit.h>    
 #import <objc/runtime.h>  
 #import "GPBMessage.h"
+#import <Foundation/Foundation.h>
 
 // ============================================================================
 //                               PART 1: CONFIG
@@ -19,7 +21,18 @@ static NSString * const kJSONKeyBrowseId      = @"browseId";
 static NSString * const kJSONKeyContinuation  = @"continuation";
 
 // ============================================================================
-//                          PART 2: PLAYBACK CLIENT
+// 2. Helper: spoof enabled
+// ============================================================================
+
+static BOOL YTPlaybackFixSpoofEnabled(void) {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if (![defaults objectForKey:@"YTPlaybackFixSpoofEnabled"])
+        return YES;
+    return [defaults boolForKey:@"YTPlaybackFixSpoofEnabled"];
+}
+
+// ============================================================================
+//                          PART 3: PLAYBACK CLIENT
 // ============================================================================
 
 @interface YTDirectPlaybackClient : NSObject
@@ -68,7 +81,7 @@ static NSString * const kJSONKeyContinuation  = @"continuation";
 @end
 
 // ============================================================================
-//                          PART 3: INNERTUBE SESSION
+//                          PART 4: INNERTUBE SESSION
 // ============================================================================
 
 @interface YTInnertubeSession : NSObject
@@ -112,7 +125,7 @@ static NSString * const kJSONKeyContinuation  = @"continuation";
 @end
 
 // ============================================================================
-//                          PART 4: NETWORK INTERCEPTOR
+//                          PART 5: NETWORK INTERCEPTOR
 // ============================================================================
 
 %hook NSMutableURLRequest
@@ -120,6 +133,11 @@ static NSString * const kJSONKeyContinuation  = @"continuation";
 - (id)initWithURL:(NSURL *)URL cachePolicy:(unsigned long long)cachePolicy timeoutInterval:(double)timeoutInterval {
     self = %orig;
     if (!self || !URL) return self;
+    
+    // If the spoof feature is disabled, bypass all modifications.
+    if (!YTPlaybackFixSpoofEnabled()) {
+        return self;
+    }
     
     NSString *path = [URL.path lowercaseString];
     
@@ -202,7 +220,7 @@ static NSString * const kJSONKeyContinuation  = @"continuation";
 
 
 // ========================================================================================
-//    PART 5: EXPERIMENTAL PoToken BYPASS (Special Thanks to @tywtyw2002 for the idea)
+//    PART 6: EXPERIMENTAL PoToken BYPASS (Special Thanks to @tywtyw2002 for the idea)
 // ========================================================================================
 
 @interface YTIIosPlaybackOnesieConfig : GPBMessage
