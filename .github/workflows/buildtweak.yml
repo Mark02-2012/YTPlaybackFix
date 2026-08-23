@@ -33,6 +33,15 @@ jobs:
             cd ${{ github.workspace }}/theos/include && git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git
           fi
 
+      - name: Debug YouTubeHeader
+        run: |
+          echo "THEOS=$THEOS"
+          echo "Workspace=${{ github.workspace }}"
+          echo "YouTubeHeader:"
+          find "${{ github.workspace }}/theos/include/YouTubeHeader" -maxdepth 1 -name "GPB*" -print
+          echo "GPBMessage locations:"
+          find "${{ github.workspace }}" -name "GPBMessage.h" -print
+
       - name: Build Package
         run: |
           make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
