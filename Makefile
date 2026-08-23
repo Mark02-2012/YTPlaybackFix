@@ -7,6 +7,6 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = YTPlaybackFix
 
 YTPlaybackFix_FILES = Refresh.xm YouFixPlaybackIssues.xm
-YTPlaybackFix_CFLAGS = -fobjc-arc -Wno-unused-function -I$(PWD)/YouTubeHeader
+YTPlaybackFix_CFLAGS = -fobjc-arc -Wno-unused-function "-I./Headers"
 
 include $(THEOS_MAKE_PATH)/tweak.mk
