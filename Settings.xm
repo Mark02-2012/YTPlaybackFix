@@ -2,6 +2,7 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 #import <YouTubeHeader/YTSettingsGroupData.h>
 #import <YouTubeHeader/YTSettingsSectionItem.h>
@@ -46,10 +47,21 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 /* ============================================================================
  * YTSettingsGroupData
  *
- * Compatibility with the older settings-category system.
+ * Compatibility with YouGroupSettings and the older settings-category system.
  * ========================================================================== */
 
 %hook YTSettingsGroupData
+
++ (NSMutableArray<NSNumber *> *)tweaks
+{
+    NSMutableArray<NSNumber *> *tweaks = %orig;
+
+    if (tweaks && ![tweaks containsObject:@(TweakSection)]) {
+        [tweaks addObject:@(TweakSection)];
+    }
+
+    return tweaks;
+}
 
 - (NSArray<NSNumber *> *)orderedCategories
 {
