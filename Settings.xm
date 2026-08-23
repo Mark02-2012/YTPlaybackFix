@@ -142,7 +142,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
     YTSettingsSectionItem *refreshItem =
         [YTSettingsSectionItemClass
             switchItemWithTitle:@"Refresh"
-            titleDescription:@"Automatically retries playback errors and restores the previous playback position."
+            titleDescription:@"Fix the playback issues by reloading the player every time the error gets detected, but you will see a short black screen. (My method, based on what was YTPlaybackFix in 0.2.2)."
             accessibilityIdentifier:@"YTPlaybackFixRefresh"
             switchOn:YTPlaybackFixRefreshEnabled()
             switchBlock:^BOOL (YTSettingsCell *cell, BOOL enabled) {
@@ -165,7 +165,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
     YTSettingsSectionItem *spoofItem =
         [YTSettingsSectionItemClass
             switchItemWithTitle:@"Playback Client Spoof"
-            titleDescription:@"Uses the Android VR playback client for playback requests."
+            titleDescription:@"Fix the playback issues by spoofing the YouTube client to Android VR and using an experimental PoToken bypass, but you will not be able to watch restricted videos (i.e age restricted videos) and sometimes the error appears even if the spoof is enabled. (YouFixPlaybackIssues by AppropriateNet)."
             accessibilityIdentifier:@"YTPlaybackFixSpoof"
             switchOn:YTPlaybackFixSpoofEnabled()
             switchBlock:^BOOL (YTSettingsCell *cell, BOOL enabled) {
