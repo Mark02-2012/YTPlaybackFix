@@ -139,7 +139,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *version =
-    [Item itemWithTitle:@"YTPlaybackFix v1.0test by Mark02-2012"
+    [YTSettingsSectionItemClass itemWithTitle:@"YTPlaybackFix v1.0test by Mark02-2012"
        titleDescription:nil
 accessibilityIdentifier:nil
         detailTextBlock:nil
