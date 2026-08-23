@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = YTPlaybackFix
 
-YTPlaybackFix_FILES = Tweak.xm
+YTPlaybackFix_FILES = Refresh.xm YouFixPlaybackIssues.xm
 YTPlaybackFix_CFLAGS = -fobjc-arc
 
 include $(THEOS_MAKE_PATH)/tweak.mk
