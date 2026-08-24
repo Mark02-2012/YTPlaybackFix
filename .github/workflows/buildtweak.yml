@@ -25,6 +25,11 @@ jobs:
           rm -rf ${{ github.workspace }}/theos/sdks
           git clone https://github.com/theos/sdks.git ${{ github.workspace }}/theos/sdks
 
+      - name: Clone YouTubeHeader
+        run: |
+          git clone --depth=1 https://github.com/PoomSmart/YouTubeHeader.git \
+          ${{ github.workspace }}/theos/include/YouTubeHeader
+
       - name: Build Package
         run: |
           make clean package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
@@ -57,7 +62,7 @@ jobs:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: YTPlaybackFix ${{ steps.tag.outputs.version }}
           files: output/*
-          make_latest: true
+          draft: true
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
