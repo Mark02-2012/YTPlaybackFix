@@ -151,7 +151,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *version =
-    [YTSettingsSectionItemClass itemWithTitle:@"YTPlaybackFix v1.0 by Mark02-2012"
+    [YTSettingsSectionItemClass itemWithTitle:@"YTPlaybackFix v1.1 by Mark02-2012"
        titleDescription:nil
 accessibilityIdentifier:nil
         detailTextBlock:nil
@@ -194,7 +194,7 @@ accessibilityIdentifier:nil
     YTSettingsSectionItem *spoofItem =
         [YTSettingsSectionItemClass
             switchItemWithTitle:@"Playback Client Spoof"
-            titleDescription:@"Fix the playback issues by spoofing the YouTube client to Android VR and using an experimental PoToken bypass, but you will not be able to watch restricted videos (i.e age restricted videos) and sometimes the error appears even if the spoof is enabled. (YouFixPlaybackIssues by AppropriateNet)."
+            titleDescription:@"Fix the playback issues by spoofing the YouTube client to TV Simply and using an experimental PoToken bypass, but you will probably not be able to watch restricted videos (i.e age restricted videos; YouFixPlaybackIssues by AppropriateNet)."
             accessibilityIdentifier:@"YTPlaybackFixSpoof"
             switchOn:YTPlaybackFixSpoofEnabled()
             switchBlock:^BOOL (YTSettingsCell *cell, BOOL enabled) {
