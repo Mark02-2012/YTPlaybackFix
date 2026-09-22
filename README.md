@@ -7,4 +7,4 @@
 
 <p>Report any issue <a href="https://github.com/Mark02-2012/YTPlaybackFix/issues">here</a></p>
 
-<p><strong>IMPORTANT please if you want to integrate this tweak into your mod make sure you put the step to clone the branch "main" to build the stable version and "beta-testing" to build the latest beta.</strong></p>
+<p><strong>IMPORTANT please if you want to integrate this tweak into your mod make sure you put the step to clone the branch "main" to build the stable version and "beta" to build the latest beta.</strong></p>
