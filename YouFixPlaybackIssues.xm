@@ -1,7 +1,13 @@
-#import <UIKit/UIKit.h>    
-#import <objc/runtime.h>  
-#import "GPBMessage.h"
+/*===========================================================================
+ * YouFixPlaybackIssues.xm – Versione completa con selezione client Morphe
+ *==========================================================================*/
+
+#import <Foundation/Foundation.h>
+#import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #import <objc/NSObjCRuntime.h>
+#import "GPBMessage.h"
+
 
 // ============================================================================
 //                               PART 1: CONFIG
@@ -15,73 +21,139 @@ static NSString * const kEndpointVideoPlayback = @"/videoplayback";
 
 static NSString * const kJSONKeyContext       = @"context";
 static NSString * const kJSONKeyClient        = @"client";
+static NSString * const kJSONKeyVisitorData   = @"visitorData";
 static NSString * const kJSONKeyVideoId       = @"videoId";
 static NSString * const kJSONKeyBrowseId      = @"browseId";
 static NSString * const kJSONKeyContinuation  = @"continuation";
 
+static NSString * const YTPlaybackFixSpoofEnabledKey   = @"YTPlaybackFixSpoofEnabled";
+static NSString * const YTPlaybackFixSpoofClientModeKey = @"YTPlaybackFixSpoofClientMode";
+
+
 // ============================================================================
-//                          PART 2: PLAYBACK CLIENT
+//                          PART 2: MORPHE-LIKE PLAYBACK CLIENTS
 // ============================================================================
+
+/* Common base */
+static NSString * const kMorpheDeviceMake    = @"Sony";
+static NSString * const kMorpheDeviceModel   = @"PS4";
+static NSString * const kMorpheOSName        = @"PlayStation 4";
+static NSString * const kMorpheOSVersion     = @"";
+static NSString * const kMorpheClientPlatform= @"GAME_CONSOLE";
+static NSString * const kMorpheUserAgent =
+    @"Mozilla/5.0 (PS4; Leanback Shell) "
+    @"Gecko/20100101 Firefox/65.0 "
+    @"LeanbackShell/01.00.01.75 "
+    @"Sony PS4/ (PS4, , no, CH)";
+
+/* TV_SABR (aka TVHTML5)  */
+static NSString * const kTVSABRClientName    = @"TVHTML5";
+static NSString * const kTVSABRClientVersion = @"7.20260707.07.00";
+static NSString * const kTVSABRNumericClient = @"7";
+
+/* TV_SIMPLY (aka TVHTML5_SIMPLY) */
+static NSString * const kTVSimplyClientName  = @"TVHTML5_SIMPLY";
+static NSString * const kTVSimplyClientVersion = @"1.1";
+static NSString * const kTVSimplyNumericClient = @"75";
+
+
+/*===========================================================================
+ * HELPER SETTINGS
+ *==========================================================================*/
+
+static BOOL YTPlaybackFixSpoofEnabled(void)
+{
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    return [defaults boolForKey:YTPlaybackFixSpoofEnabledKey];
+}
+
+static NSInteger YTPlaybackFixSpoofClientMode(void)
+{
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if (![defaults objectForKey:YTPlaybackFixSpoofClientModeKey]) return 0;
+    NSInteger mode = [defaults integerForKey:YTPlaybackFixSpoofClientModeKey];
+    return mode == 1 ? 1 : 0;          // clamp
+}
+
+static BOOL YTPlaybackFixSpoofUsesTVSABR(void)
+{
+    return YTPlaybackFixSpoofClientMode() == 1;
+}
+
+/* Dizionario completo del client attivo (usato in header, body e URL) */
+static NSDictionary *YTPlaybackFixClientContext(void)
+{
+    BOOL usesTVSABR = YTPlaybackFixSpoofUsesTVSABR();
+    return @{
+        @"clientName":     usesTVSABR ? kTVSABRClientName    : kTVSimplyClientName,
+        @"clientVersion":  usesTVSABR ? kTVSABRClientVersion : kTVSimplyClientVersion,
+        @"hl":             @"en",
+        @"timeZone":       @"UTC",
+        @"utcOffsetMinutes": @0,
+        @"deviceMake":     kMorpheDeviceMake,
+        @"deviceModel":    kMorpheDeviceModel,
+        @"osName":         kMorpheOSName,
+        @"osVersion":      kMorpheOSVersion,
+        @"clientPlatform": kMorpheClientPlatform,
+        @"userAgent":      kMorpheUserAgent
+    };
+}
+
+static NSString *YTPlaybackFixNumericClient(void)
+{
+    return YTPlaybackFixSpoofUsesTVSABR() ? kTVSABRNumericClient : kTVSimplyNumericClient;
+}
+
+static NSString *YTPlaybackFixUserAgent(void)
+{
+    return kMorpheUserAgent;
+}
+
+
+/*===========================================================================
+ * YTDirectPlaybackClient – genera header e blueprint del contesto
+ *==========================================================================*/
 
 @interface YTDirectPlaybackClient : NSObject
 + (NSDictionary *)apiHeadersForVisitorData:(NSString *)visitorData;
++ (NSDictionary *)activeClientContext;
 + (NSDictionary *)contextBlueprint;
 @end
 
 @implementation YTDirectPlaybackClient
 
-+ (NSDictionary *)apiHeadersForVisitorData:(NSString *)visitorData {
++ (NSDictionary *)apiHeadersForVisitorData:(NSString *)visitorData
+{
+    if (!YTPlaybackFixSpoofEnabled()) return @{};
+
     NSMutableDictionary *headers = [NSMutableDictionary dictionary];
-    headers[@"Content-Type"] = @"application/x-protobuf";
     headers[@"Accept-Language"] = @"*";
-    
-    headers[@"X-YouTube-Client-Name"] = @"75";
-    headers[@"X-YouTube-Client-Version"] = @"1.1";
-    headers[@"User-Agent"] =
-    @"Mozilla/5.0 (PS4; Leanback Shell) "
-    @"Gecko/20100101 Firefox/65.0 LeanbackShell/01.00.01.75 "
-    @"Sony PS4/ (PS4, , no, CH)";
+    headers[@"X-YouTube-Client-Name"] = YTPlaybackFixNumericClient();
+    headers[@"X-YouTube-Client-Version"] = [YTPlaybackFixClientContext()[@"clientVersion"]];
+    headers[@"User-Agent"] = YTPlaybackFixUserAgent();
     headers[@"Origin"] = @"https://www.youtube.com";
 
-if (visitorData.length > 0) {
-    headers[@"X-Goog-Visitor-Id"] = visitorData;
+    if (visitorData.length > 0) {
+        headers[@"X-Goog-Visitor-Id"] = visitorData;
+    }
+    return [headers copy];
 }
 
-return [headers copy];
++ (NSDictionary *)activeClientContext
+{
+    return YTPlaybackFixClientContext();
 }
 
-+ (NSDictionary *)contextBlueprint {
-    return @{
-        kJSONKeyContext: @{
-            kJSONKeyClient: @{
-                @"clientName": @"TVHTML5_SIMPLY",
-                @"clientVersion": @"1.1",
-
-                @"hl": @"en",
-                @"timeZone": @"UTC",
-                @"utcOffsetMinutes": @0,
-
-                @"deviceMake": @"Sony",
-                @"deviceModel": @"PS4",
-
-                @"osName": @"",
-                @"osVersion": @"7.20260707.07.00",
-
-                @"clientPlatform": @"GAME_CONSOLE",
-
-                @"userAgent":
-                    @"Mozilla/5.0 (PS4; Leanback Shell) "
-                    @"Gecko/20100101 Firefox/65.0 LeanbackShell/01.00.01.75 "
-                    @"Sony PS4/ (PS4, , no, CH)"
-            }
-        }
-    };
++ (NSDictionary *)contextBlueprint
+{
+    return @{ kJSONKeyContext: [self activeClientContext] };
 }
 @end
 
-// ============================================================================
-//                          PART 3: INNERTUBE SESSION
-// ============================================================================
+
+/*===========================================================================
+ * YTInnertubeSession – cattura visitorData e riscrive il payload JSON
+ *==========================================================================*/
 
 @interface YTInnertubeSession : NSObject
 @property (nonatomic, copy) NSString *visitorData;
@@ -90,573 +162,344 @@ return [headers copy];
 @end
 
 @implementation YTInnertubeSession
-+ (instancetype)sharedSession {
++ (instancetype)sharedSession
+{
     static YTInnertubeSession *shared = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{ shared = [[YTInnertubeSession alloc] init]; });
     return shared;
 }
 
-- (NSDictionary *)buildPayloadWithIncomingBody:(NSDictionary *)incomingBody {
-    if (![incomingBody isKindOfClass:[NSDictionary class]]) return incomingBody;
-    
+- (NSDictionary *)buildPayloadWithIncomingBody:(NSDictionary *)incomingBody
+{
+    if (!YTPlaybackFixSpoofEnabled() || ![incomingBody isKindOfClass:[NSDictionary class]]) return nil;
+
     NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
-    
     NSDictionary *incomingContext = incomingBody[kJSONKeyContext];
-    NSMutableDictionary *mutableContext = [incomingContext isKindOfClass:[NSDictionary class]] ? [incomingContext mutableCopy] : [NSMutableDictionary dictionary];
-    
-    NSDictionary *vrBlueprint = [YTDirectPlaybackClient contextBlueprint];
-    NSDictionary *vrClientData = vrBlueprint[kJSONKeyContext][kJSONKeyClient];
-    
-    if (vrClientData) {
-        NSMutableDictionary *mutableClientData = [vrClientData mutableCopy];
-        
-        
-        if (self.visitorData.length > 0) {
-            mutableClientData[@"visitorData"] = self.visitorData;
+    NSMutableDictionary *mutableContext = [incomingContext isKindOfClass:[NSDictionary class]]
+                                          ? [incomingContext mutableCopy]
+                                          : [NSMutableDictionary dictionary];
+
+    NSDictionary *incomingClient = incomingContext[kJSONKeyClient];
+    if ([incomingClient isKindOfClass:[NSDictionary class]]) {
+        id incomingVisitor = incomingClient[kJSONKeyVisitorData];
+        if ([incomingVisitor isKindOfClass:[NSString class]] && incomingVisitor.length > 0) {
+            self.visitorData = incomingVisitor;
         }
-        mutableContext[kJSONKeyClient] = [mutableClientData copy];
     }
-    
+
+    NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
+    if (self.visitorData.length > 0) {
+        client[kJSONKeyVisitorData] = self.visitorData;
+    }
+    mutableContext[kJSONKeyClient] = [client copy];
     mutatedBody[kJSONKeyContext] = [mutableContext copy];
     return [mutatedBody copy];
 }
 @end
 
 
-// ============================================================================ 
-//                      PART 4: NETWORK INTERCEPTOR
-// ============================================================================
+/*==========================================================================
+ * URL HELPERS
+ *========================================================================*/
+
+static BOOL YTPathContains(NSURL *URL, NSString *endpoint)
+{
+    if (!URL || !endpoint.length) return NO;
+    NSString *path = URL.path.lowercaseString;
+    return [path containsString:endpoint.lowercaseString];
+}
+
+static BOOL YTIsInnertubeRequest(NSURL *URL)
+{
+    return YTPathContains(URL, kEndpointPlayer) ||
+           YTPathContains(URL, kEndpointNext)   ||
+           YTPathContains(URL, kEndpointBrowse) ||
+           YTPathContains(URL, kEndpointInitPlayback);
+}
+
+static BOOL YTIsVideoPlaybackRequest(NSURL *URL)
+{
+    return YTPathContains(URL, kEndpointVideoPlayback);
+}
+
+static BOOL YTShouldMutateRequest(NSURLRequest *request)
+{
+    if (!request || !YTPlaybackFixSpoofEnabled()) return NO;
+    NSURL *URL = request.URL;
+    return URL && (YTIsInnertubeRequest(URL) || YTIsVideoPlaybackRequest(URL));
+}
+
+/* Sostituisce o aggiunge un parametro query preservando l’URL */
+static NSURL *YTURLBySettingQueryParameter(NSURL *URL, NSString *parameter, NSString *value)
+{
+    if (!URL || !parameter.length || !value.length) return URL;
+
+    NSURLComponents *components = [NSURLComponents componentsWithURL:URL includingQueryItems:YES];
+    if (!components) return URL;
+
+    NSMutableArray<NSURLQueryItem *> *queryItems = [components.queryItems mutableCopy];
+    if (!queryItems) queryItems = [NSMutableArray array];
+
+    NSMutableArray<NSURLQueryItem *> *filtered = [NSMutableArray array];
+    for (NSURLQueryItem *item in queryItems) {
+        if ([item.name caseInsensitiveCompare:parameter] != NSOrderedSame) {
+            [filtered addObject:item];
+        }
+    }
+    [filtered addObject:[NSURLQueryItem queryItemWithName:parameter value:value]];
+    components.queryItems = filtered;
+
+    NSURL *rewritten = components.URL;
+    return rewritten ?: URL;
+}
+
+static NSURL *YTRewriteInnertubeURL(NSURL *URL)
+{
+    NSDictionary *client = YTPlaybackFixClientContext();
+    NSURL *newURL = YTURLBySettingQueryParameter(URL, @"c", client[@"clientName"]);
+    newURL = YTURLBySettingQueryParameter(newURL, @"cver", client[@"clientVersion"]);
+    return newURL;
+}
+
+static NSURL *YTRewriteVideoPlaybackURL(NSURL *URL)
+{
+    return YTURLBySettingQueryParameter(URL, @"user_agent", YTPlaybackFixUserAgent());
+}
 
 
-// ============================================================================ 
-//                   PART 4a: NSMutableURLRequest
-// ============================================================================
+/*==========================================================================
+ * REQUEST MUTATION HELPERS
+ *========================================================================*/
 
- // Initial hook for intercepting and modifying the request in its earliest state possible
+static void YTApplyCustomHeaders(NSMutableURLRequest *request)
+{
+    if (!request || !YTPlaybackFixSpoofEnabled()) return;
+
+    NSDictionary *headers = [YTDirectPlaybackClient apiHeadersForVisitorData:
+                                [YTInnertubeSession sharedSession].visitorData];
+    [headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) {
+        [request setValue:value forHTTPHeaderField:key];
+    }];
+}
+
+/* Riscrive il body SOLO per le richieste Innertube JSON */
+static BOOL YTApplyCustomBody(NSMutableURLRequest *request)
+{
+    if (!request || !request.HTTPBody.length) return NO;
+    if (!YTIsInnertubeRequest(request.URL)) return NO;
+
+    NSString *contentType = [request valueForHTTPHeaderField:@"Content-Type"] ?: @"";
+    if ([contentType.lowercaseString containsString:@"protobuf"]) return NO;
+
+    NSError *error = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:request.HTTPBody options:0 error:&error];
+    if (error || ![parsed isKindOfClass:[NSDictionary class]]) return NO;
+
+    NSDictionary *mutated = [[YTInnertubeSession sharedSession] buildPayloadWithIncomingBody:parsed];
+    if (!mutated) return NO;
+
+    NSData *data = [NSJSONSerialization dataWithJSONObject:mutated options:0 error:nil];
+    if (!data) return NO;
+
+    request.HTTPBody = data;
+    /* imposta content-type solo dopo una riscrittura JSON */
+    [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    return YES;
+}
+
+static void YTApplyURLSpoof(NSMutableURLRequest *request)
+{
+    if (!request) return;
+    NSURL *URL = request.URL;
+    if (!URL) return;
+
+    if (YTPathContains(URL, kEndpointInitPlayback)) {
+        NSURL *newURL = YTRewriteInnertubeURL(URL);
+        if (newURL && ![newURL isEqual:URL]) request.URL = newURL;
+        URL = request.URL;
+    }
+    if (YTIsVideoPlaybackRequest(URL)) {
+        NSURL *newURL = YTRewriteVideoPlaybackURL(URL);
+        if (newURL && ![newURL isEqual:URL]) request.URL = newURL;
+    }
+}
+
+static void YTApplyPlaybackSpoof(NSMutableURLRequest *request)
+{
+    if (!request || !YTPlaybackFixSpoofEnabled()) return;
+    NSURL *URL = request.URL;
+    if (!URL) return;
+
+    if (YTIsInnertubeRequest(URL)) {
+        YTApplyCustomBody(request);
+        YTApplyCustomHeaders(request);
+        YTApplyURLSpoof(request);
+        return;
+    }
+    if (YTIsVideoPlaybackRequest(URL)) {
+        YTApplyCustomHeaders(request);
+        YTApplyURLSpoof(request);
+    }
+}
+
+
+/*==========================================================================
+ * HOOKS
+ *========================================================================*/
+
 %hook NSMutableURLRequest
 
-- (id)initWithURL:(NSURL *)URL cachePolicy:(unsigned long long)cachePolicy timeoutInterval:(double)timeoutInterval {
-    self = %orig;
-    if (!self || !URL) return self;
-    
-    NSString *path = [URL.path lowercaseString];
-    
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-        
-       
-        if (self.HTTPBody) {
-            NSDictionary *incomingJSON = [NSJSONSerialization JSONObjectWithData:self.HTTPBody options:0 error:nil];
-            if ([incomingJSON isKindOfClass:[NSDictionary class]]) {
-                
-                NSDictionary *incomingContext = incomingJSON[kJSONKeyContext];
-                if ([incomingContext isKindOfClass:[NSDictionary class]]) {
-                    NSDictionary *incomingClient = incomingContext[kJSONKeyClient];
-                    if ([incomingClient isKindOfClass:[NSDictionary class]] && incomingClient[@"visitorData"]) {
-                        [YTInnertubeSession sharedSession].visitorData = incomingClient[@"visitorData"];
-                    }
-                }
-                
-                NSDictionary *mutatedJSON = [[YTInnertubeSession sharedSession] buildPayloadWithIncomingBody:incomingJSON];
-                NSData *mutatedData = [NSJSONSerialization dataWithJSONObject:mutatedJSON options:0 error:nil];
-                if (mutatedData) {
-                    self.HTTPBody = mutatedData;
-                }
-            }
-        }
-        
-        
-        NSDictionary *computedHeaders = [YTDirectPlaybackClient apiHeadersForVisitorData:[YTInnertubeSession sharedSession].visitorData];
-        for (NSString *headerKey in computedHeaders) {
-            [self setValue:computedHeaders[headerKey] forHTTPHeaderField:headerKey];
-        }
-        
-        
-        if ([path containsString:[kEndpointInitPlayback lowercaseString]]) {
-            NSString *urlString = self.URL.absoluteString;
-            if (urlString.length > 0) {
-                
-                
-                NSRegularExpression *regexC = [NSRegularExpression regularExpressionWithPattern:@"([?&])c=[^&]+" options:0 error:nil];
-                urlString = [regexC stringByReplacingMatchesInString:urlString options:0 range:NSMakeRange(0, urlString.length) withTemplate:@"$1c=TVHTML5_SIMPLY"];
-                
-           
-                NSRegularExpression *regexCver = [NSRegularExpression regularExpressionWithPattern:@"([?&])cver=[^&]+" options:0 error:nil];
-                urlString = [regexCver stringByReplacingMatchesInString:urlString options:0 range:NSMakeRange(0, urlString.length) withTemplate:@"$1cver=1.1"];
-                
-                NSURL *newURL = [NSURL URLWithString:urlString];
-                if (newURL) {
-                    [self setURL:newURL];
-                }
-            }
-        }
-    }
-    
-     
-    if ([path containsString:@"/videoplayback"]) {
-        NSString *urlString = self.URL.absoluteString;
-        if (urlString.length > 0) {
-            
-           
-            NSRegularExpression *regexUA = [NSRegularExpression regularExpressionWithPattern:@"([?&])user_agent=[^&]+" options:0 error:nil];
-            
-           
-          urlString = [regexUA stringByReplacingMatchesInString:urlString options:0 range:NSMakeRange(0, urlString.length) withTemplate:@"$1user_agent=Mozilla%2F5.0%20%28PS4%3B%20Leanback%20Shell%29%20Gecko%2F20100101%20Firefox%2F65.0%20LeanbackShell%2F01.00.01.75%20Sony%20PS4%2F%20%28PS4%2C%20%2C%20no%2C%20CH%29"];
-            
-            NSURL *newURL = [NSURL URLWithString:urlString];
-            if (newURL) {
-                [self setURL:newURL];
-            }
-        }
-    }
-    
+- (id)initWithURL:(NSURL *)URL
+{
+    self = %orig(URL);
+    if (!self) return self;
+    YTApplyPlaybackSpoof(self);
     return self;
 }
 
+- (id)initWithURL:(NSURL *)URL cachePolicy:(NSURLRequestCachePolicy)cachePolicy timeoutInterval:(NSTimeInterval)timeoutInterval
+{
+    self = %orig(URL, cachePolicy, timeoutInterval);
+    if (!self) return self;
+    YTApplyPlaybackSpoof(self);
+    return self;
+}
 %end
 
-
-
-// ============================================================================ 
-//                  PART 4b: GTMSessionFetcher
-// ============================================================================
 
 @interface GTMSessionFetcher : NSObject
 - (id)mutableRequestForTesting;
 @end
 
-
-// ============================================================================ 
-//                        SPECIAL HELPERS
-// ============================================================================
-
-
-static void YTApplyCustomHeaders(NSMutableURLRequest *request) {
-    if (!request)
-        return;
-
-    NSDictionary *headers =
-        [YTDirectPlaybackClient apiHeadersForVisitorData:
-            [YTInnertubeSession sharedSession].visitorData];
-
-    for (NSString *key in headers) {
-        [request setValue:headers[key] forHTTPHeaderField:key];
-    }
-}
-
-static void YTApplyCustomBody(NSMutableURLRequest *request) {
-    if (!request.HTTPBody)
-        return;
-
-    NSDictionary *incomingJSON =
-        [NSJSONSerialization JSONObjectWithData:request.HTTPBody
-                                        options:0
-                                          error:nil];
-
-    if (![incomingJSON isKindOfClass:[NSDictionary class]])
-        return;
-
-    NSString *path = request.URL.path.lowercaseString;
-
-    if (![path containsString:kEndpointPlayer.lowercaseString] &&
-        ![path containsString:kEndpointNext.lowercaseString] &&
-        ![path containsString:kEndpointBrowse.lowercaseString] &&
-        ![path containsString:kEndpointInitPlayback.lowercaseString]) {
-        return;
-    }
-
-    NSDictionary *incomingContext = incomingJSON[kJSONKeyContext];
-
-    if ([incomingContext isKindOfClass:[NSDictionary class]]) {
-        NSDictionary *incomingClient = incomingContext[kJSONKeyClient];
-
-        if ([incomingClient isKindOfClass:[NSDictionary class]] &&
-            incomingClient[@"visitorData"]) {
-
-            [YTInnertubeSession sharedSession].visitorData =
-                incomingClient[@"visitorData"];
-        }
-    }
-
-    NSDictionary *mutatedJSON =
-        [[YTInnertubeSession sharedSession]
-            buildPayloadWithIncomingBody:incomingJSON];
-
-    NSData *mutatedData =
-        [NSJSONSerialization dataWithJSONObject:mutatedJSON
-                                        options:0
-                                          error:nil];
-
-    if (mutatedData) {
-        request.HTTPBody = mutatedData;
-    }
-}
-
-
-
-// ============================================================================ 
-//                    GTMSessionFetcher HOOK
-// ============================================================================
-
-// Catching and mass modifying the request in one of its final stages
 %hook GTMSessionFetcher
 
-- (id)initWithRequest:(id)request {
+- (id)initWithRequest:(id)request
+{
+    if (![request isKindOfClass:[NSURLRequest class]]) return %orig(request);
+    NSURLRequest *typed = (NSURLRequest *)request;
+    if (!YTShouldMutateRequest(typed)) return %orig(request);
 
-    NSURL *URL = [request URL];
-
-    if (!URL) {
-        return %orig(request);
-    }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomBody(request);
-            YTApplyCustomHeaders(request);
-
-        }
-        else if ([request isKindOfClass:[NSURLRequest class]]) {
-
-            NSMutableURLRequest *mutableRequest =
-                [request mutableCopy];
-
-            YTApplyCustomBody(mutableRequest);
-            YTApplyCustomHeaders(mutableRequest);
-
-            request = mutableRequest;
-        }
-    }
-
-    if ([path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomHeaders(request);
-
-        }
-        else if ([request isKindOfClass:[NSURLRequest class]]) {
-
-            NSMutableURLRequest *mutableRequest =
-                [request mutableCopy];
-
-            YTApplyCustomHeaders(mutableRequest);
-
-            request = mutableRequest;
-        }
-    }
-
+    NSMutableURLRequest *mutableRequest = [typed isKindOfClass:[NSMutableURLRequest class]]
+                                        ? (NSMutableURLRequest *)typed
+                                        : [typed mutableCopy];
+    YTApplyPlaybackSpoof(mutableRequest);
+    request = mutableRequest;
     return %orig(request);
 }
 
+- (id)initWithRequest:(id)request configuration:(id)configuration
+{
+    if (![request isKindOfClass:[NSURLRequest class]]) return %orig(request, configuration);
+    NSURLRequest *typed = (NSURLRequest *)request;
+    if (!YTShouldMutateRequest(typed)) return %orig(request, configuration);
 
-- (id)initWithRequest:(id)request configuration:(id)configuration {
-
-    NSURL *URL = [request URL];
-
-    if (!URL) {
-        return %orig(request, configuration);
-    }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomBody(request);
-            YTApplyCustomHeaders(request);
-
-        }
-        else if ([request isKindOfClass:[NSURLRequest class]]) {
-
-            NSMutableURLRequest *mutableRequest =
-                [request mutableCopy];
-
-            YTApplyCustomBody(mutableRequest);
-            YTApplyCustomHeaders(mutableRequest);
-
-            request = mutableRequest;
-        }
-    }
-
-    if ([path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomHeaders(request);
-
-        }
-        else if ([request isKindOfClass:[NSURLRequest class]]) {
-
-            NSMutableURLRequest *mutableRequest =
-                [request mutableCopy];
-
-            YTApplyCustomHeaders(mutableRequest);
-
-            request = mutableRequest;
-        }
-    }
-
+    NSMutableURLRequest *mutableRequest = [typed isKindOfClass:[NSMutableURLRequest class]]
+                                        ? (NSMutableURLRequest *)typed
+                                        : [typed mutableCopy];
+    YTApplyPlaybackSpoof(mutableRequest);
+    request = mutableRequest;
     return %orig(request, configuration);
 }
 
-
-- (void)updateMutableRequest:(id)request {
-
-    NSURL *URL = [request URL];
-
-    if (!URL) {
+- (void)updateMutableRequest:(id)request
+{
+    if (![request isKindOfClass:[NSMutableURLRequest class]]) {
         %orig(request);
         return;
     }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomBody(request);
-            YTApplyCustomHeaders(request);
-        }
-    }
-
-    if ([path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-
-            YTApplyCustomHeaders(request);
-        }
-    }
-
+    YTApplyPlaybackSpoof((NSMutableURLRequest *)request);
     %orig(request);
 }
 
+- (void)setRequestValue:(id)value forHTTPHeaderField:(id)field
+{
+    if (!YTPlaybackFixSpoofEnabled()) { %orig(value, field); return; }
+    if (![self respondsToSelector:@selector(mutableRequestForTesting)]) { %orig(value, field); return; }
+    NSMutableURLRequest *req = [self mutableRequestForTesting];
+    if (!req) { %orig(value, field); return; }
 
-- (void)setRequestValue:(id)value
-    forHTTPHeaderField:(id)field {
-
-    NSMutableURLRequest *request =
-        [self mutableRequestForTesting];
-
-    if (!request) {
-        %orig(value, field);
-        return;
-    }
-
-    NSURL *URL = [request URL];
-
-    if (!URL) {
-        %orig(value, field);
-        return;
-    }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]] ||
-        [path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        // Let the original setter run first.
-        %orig(value, field);
-
-        // Then enforce our client headers.
-        YTApplyCustomHeaders(request);
-
-        return;
-    }
-
+    BOOL should = YTShouldMutateRequest(req);
     %orig(value, field);
+    if (should) YTApplyCustomHeaders(req);
 }
 
+- (void)setBodyData:(id)data
+{
+    if (![self respondsToSelector:@selector(mutableRequestForTesting)]) { %orig(data); return; }
+    NSMutableURLRequest *req = [self mutableRequestForTesting];
+    if (!req) { %orig(data); return; }
 
-- (void)setBodyData:(id)data {
-
-    NSMutableURLRequest *request =
-        [self mutableRequestForTesting];
-
-    if (!request) {
-        %orig(data);
-        return;
-    }
-
-    NSURL *URL = [request URL];
-
-    if (!URL) {
-        %orig(data);
-        return;
-    }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        %orig(data);
-
-        if (request) {
-            YTApplyCustomBody(request);
-        }
-
-        return;
-    }
-
+    BOOL should = YTShouldMutateRequest(req);
     %orig(data);
+    if (should) { YTApplyCustomBody(req); YTApplyCustomHeaders(req); }
 }
-
-
 %end
 
 
-// ============================================================================ 
-//            PART 4c: GTMSessionFetcherSessionDelegateDispatcher
-// ============================================================================
-
-// Catching the request in what it appears to be its final stage; The dispatcher checks and maybe modifies the final request and it sends it to Google.
 %hook GTMSessionFetcherSessionDelegateDispatcher
 
-- (id)connection:(id)connection
-willSendRequest:(id)request
-redirectResponse:(id)redirectResponse {
+- (id)connection:(id)connection willSendRequest:(id)request redirectResponse:(id)redirectResponse
+{
+    if (![request isKindOfClass:[NSURLRequest class]]) return %orig(connection, request, redirectResponse);
+    NSURLRequest *typed = (NSURLRequest *)request;
+    if (!YTShouldMutateRequest(typed)) return %orig(connection, request, redirectResponse);
 
-    NSURL *URL = [request URL];
-
-    if (!URL) {
-        return %orig(connection, request, redirectResponse);
-    }
-
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        NSMutableURLRequest *mutableRequest =
-            [request mutableCopy];
-
-        YTApplyCustomBody(mutableRequest);
-        YTApplyCustomHeaders(mutableRequest);
-
-        request = mutableRequest;
-
-    }
-    else if ([path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        NSMutableURLRequest *mutableRequest =
-            [request mutableCopy];
-
-        YTApplyCustomHeaders(mutableRequest);
-
-        request = mutableRequest;
-    }
-
+    NSMutableURLRequest *mutableRequest = [(NSURLRequest *)request mutableCopy];
+    if (!mutableRequest) return %orig(connection, request, redirectResponse);
+    YTApplyPlaybackSpoof(mutableRequest);
+    request = mutableRequest;
     return %orig(connection, request, redirectResponse);
 }
-
 
 - (void)URLSession:(id)session
               task:(id)task
 willPerformHTTPRedirection:(id)response
         newRequest:(id)newRequest
- completionHandler:(id)completionHandler {
-
-    NSURL *URL = [newRequest URL];
-
-    if (!URL) {
-        %orig(session,
-              task,
-              response,
-              newRequest,
-              completionHandler);
+ completionHandler:(id)completionHandler
+{
+    if (![newRequest isKindOfClass:[NSURLRequest class]]) {
+        %orig(session, task, response, newRequest, completionHandler);
+        return;
+    }
+    NSURLRequest *typed = (NSURLRequest *)newRequest;
+    if (!YTShouldMutateRequest(typed)) {
+        %orig(session, task, response, newRequest, completionHandler);
         return;
     }
 
-    NSString *path = [URL.path lowercaseString];
-
-    if ([path containsString:[kEndpointPlayer lowercaseString]] || 
-        [path containsString:[kEndpointNext lowercaseString]] || 
-        [path containsString:[kEndpointBrowse lowercaseString]] ||
-        [path containsString:[kEndpointInitPlayback lowercaseString]]) {
-
-        NSMutableURLRequest *mutableRequest =
-            [newRequest mutableCopy];
-
-        YTApplyCustomBody(mutableRequest);
-        YTApplyCustomHeaders(mutableRequest);
-
-        newRequest = mutableRequest;
-
+    NSMutableURLRequest *mutableRequest = [(NSURLRequest *)newRequest mutableCopy];
+    if (!mutableRequest) {
+        %orig(session, task, response, newRequest, completionHandler);
+        return;
     }
-    else if ([path containsString:[kEndpointVideoPlayback lowercaseString]]) {
-
-        NSMutableURLRequest *mutableRequest =
-            [newRequest mutableCopy];
-
-        YTApplyCustomHeaders(mutableRequest);
-
-        newRequest = mutableRequest;
-    }
-
-    %orig(session,
-          task,
-          response,
-          newRequest,
-          completionHandler);
+    YTApplyPlaybackSpoof(mutableRequest);
+    newRequest = mutableRequest;
+    %orig(session, task, response, newRequest, completionHandler);
 }
 
-
-- (void)URLSession:(id)session
-              task:(id)task
- needNewBodyStream:(id)completionHandler {
-
+- (void)URLSession:(id)session task:(id)task needNewBodyStream:(id)completionHandler
+{
     %orig(session, task, completionHandler);
 }
-
-
 %end
 
 
-// ========================================================================================
-//    PART 5: EXPERIMENTAL PoToken BYPASS (Special Thanks to @tywtyw2002 for the idea)
-// ========================================================================================
+/*==========================================================================
+ * EXPERIMENTAL PoToken BYPASS
+ *========================================================================*/
 
 @interface YTIIosPlaybackOnesieConfig : GPBMessage
 - (BOOL)hasCommonConfig;
 @end
 
-// In order to use the base_url from YTIOnesieHotConfig, we have to hook this class in order for url and ustreamer_config from YTIIosPlaybackOnesieConfig to become null. This MAY bypass PoToken.
-
 %hook YTIIosPlaybackOnesieConfig
-
-- (BOOL)hasCommonConfig {
-return 0; 
+- (BOOL)hasCommonConfig
+{
+    if (!YTPlaybackFixSpoofEnabled()) return %orig;
+    return NO;
 }
-
 %end
 
-//Keep in mind this is experimental and there is a good chance that it won't have any effect whatsoever, tho I may update this when I get clue how to maybe patch it better. And sorry if one hooked class seems exaggerated for me to call a PoToken bypass......
 
-
-
+%ctor { %init; }
