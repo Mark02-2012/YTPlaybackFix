@@ -1,6 +1,6 @@
 Package: com.mark02-2012.ytplaybackfix
 Name: YTPlaybackFix
-Version: 1.1
+Version: 1.2
 Architecture: iphoneos-arm
 Description: Fix for YouTube playback "something went wrong" error.
 Maintainer: Mark02-2012
