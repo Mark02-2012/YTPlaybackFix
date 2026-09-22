@@ -10,18 +10,25 @@
 #import <YouTubeHeader/YTSettingsViewController.h>
 #import <YouTubeHeader/YTSettingsCell.h>
 #import <YouTubeHeader/YTIIcon.h>
+#import <YouTubeHeader/YTSettingsPickerViewController.h>
 
 #define TweakName @"YTPlaybackFix"
 
 static const NSInteger TweakSection = 'ytpf';
 
-static NSString * const YTPlaybackFixRefreshKey = @"YTPlaybackFixRefreshEnabled";
-static NSString * const YTPlaybackFixSpoofKey   = @"YTPlaybackFixSpoofEnabled";
+static NSString * const YTPlaybackFixRefreshKey =
+    @"YTPlaybackFixRefreshEnabled";
+
+static NSString * const YTPlaybackFixSpoofKey =
+    @"YTPlaybackFixSpoofEnabled";
+
+static NSString * const YTPlaybackFixSpoofClientModeKey =
+    @"YTPlaybackFixSpoofClientMode";
 
 
 /* ============================================================================
  * Helpers
- * ========================================================================== */
+ * ============================================================================ */
 
 static BOOL YTPlaybackFixRefreshEnabled(void)
 {
@@ -32,6 +39,7 @@ static BOOL YTPlaybackFixRefreshEnabled(void)
 
     return [defaults boolForKey:YTPlaybackFixRefreshKey];
 }
+
 
 static BOOL YTPlaybackFixSpoofEnabled(void)
 {
@@ -44,11 +52,31 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 }
 
 
+static NSInteger YTPlaybackFixSpoofClientMode(void)
+{
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+    if (![defaults objectForKey:YTPlaybackFixSpoofClientModeKey])
+        return 0;
+
+    NSInteger mode =
+        [defaults integerForKey:YTPlaybackFixSpoofClientModeKey];
+
+    return mode == 1 ? 1 : 0;
+}
+
+
+static NSString *YTPlaybackFixClientTitle(void)
+{
+    return YTPlaybackFixSpoofClientMode() == 1
+        ? @"TV_SABR"
+        : @"TV Simply";
+}
+
+
 /* ============================================================================
- * YTSettingsGroupData
- *
- * Compatibility with YouGroupSettings and the older settings-category system.
- * ========================================================================== */
+ * Settings categories
+ * ============================================================================ */
 
 %hook YTSettingsGroupData
 
@@ -67,33 +95,22 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 {
     if (self.type != 1 ||
         class_getClassMethod(objc_getClass("YTSettingsGroupData"),
-                             @selector(tweaks)))
-    {
+                             @selector(tweaks))) {
         return %orig;
     }
 
-    NSArray<NSNumber *> *categories = %orig;
+    NSArray<NSNumber *> *orig = %orig;
+    NSMutableArray<NSNumber *> *categories = [orig mutableCopy];
 
-    NSMutableArray<NSNumber *> *mutableCategories = [categories mutableCopy];
-
-    NSNumber *sectionNumber = @(TweakSection);
-
-    if (![mutableCategories containsObject:sectionNumber]) {
-        [mutableCategories insertObject:sectionNumber atIndex:0];
+    if (![categories containsObject:@(TweakSection)]) {
+        [categories insertObject:@(TweakSection) atIndex:0];
     }
 
-    return mutableCategories.copy;
+    return categories.copy;
 }
 
 %end
 
-
-/* ============================================================================
- * YTAppSettingsPresentationData
- *
- * Required for older YouTube versions, including the 20.21.6 settings system.
- * Inserts our custom section immediately after category 1.
- * ========================================================================== */
 
 %hook YTAppSettingsPresentationData
 
@@ -105,13 +122,11 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 
     if (insertIndex != NSNotFound) {
 
-        NSMutableArray<NSNumber *> *categories = [order mutableCopy];
+        NSMutableArray<NSNumber *> *categories =
+            [order mutableCopy];
 
-        NSNumber *sectionNumber = @(TweakSection);
-
-        if (![categories containsObject:sectionNumber]) {
-
-            [categories insertObject:sectionNumber
+        if (![categories containsObject:@(TweakSection)]) {
+            [categories insertObject:@(TweakSection)
                             atIndex:insertIndex + 1];
         }
 
@@ -126,7 +141,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 
 /* ============================================================================
  * Settings section
- * ========================================================================== */
+ * ============================================================================ */
 
 @interface YTSettingsSectionItemManager (YTPlaybackFix)
 
@@ -143,23 +158,24 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
     NSMutableArray<YTSettingsSectionItem *> *sectionItems =
         [NSMutableArray array];
 
-    Class YTSettingsSectionItemClass = %c(YTSettingsSectionItem);
+    Class Item = %c(YTSettingsSectionItem);
 
+    YTSettingsViewController *settingsViewController =
+        [self valueForKey:@"_dataDelegate"];
 
     /* ------------------------------------------------------------------------
      * Version
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *version =
-    [YTSettingsSectionItemClass itemWithTitle:@"YTPlaybackFix v1.1 by Mark02-2012"
-       titleDescription:nil
-accessibilityIdentifier:nil
-        detailTextBlock:nil
-            selectBlock:^BOOL (YTSettingsCell *cell,
+        [Item itemWithTitle:@"YTPlaybackFix v1.1 by Mark02-2012"
+           titleDescription:nil
+        accessibilityIdentifier:nil
+            detailTextBlock:nil
+                selectBlock:^BOOL (YTSettingsCell *cell,
                                NSUInteger arg1) {
 
         return NO;
-
     }];
 
     [sectionItems addObject:version];
@@ -169,9 +185,10 @@ accessibilityIdentifier:nil
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *refreshItem =
-        [YTSettingsSectionItemClass
+        [Item
             switchItemWithTitle:@"Refresh"
-            titleDescription:@"Fix the playback issues by reloading the player every time the error gets detected, but you will see a short black screen. (My method, based on what was YTPlaybackFix in 0.2.2)."
+            titleDescription:
+                @"Fix playback issues by reloading the player every time the error gets detected, but you will see a short black screen. (My method, based on what was YTPlaybackFix in 0.2.2)."
             accessibilityIdentifier:@"YTPlaybackFixRefresh"
             switchOn:YTPlaybackFixRefreshEnabled()
             switchBlock:^BOOL (YTSettingsCell *cell, BOOL enabled) {
@@ -186,15 +203,15 @@ accessibilityIdentifier:nil
 
     [sectionItems addObject:refreshItem];
 
-
     /* ------------------------------------------------------------------------
      * Playback Client Spoof
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *spoofItem =
-        [YTSettingsSectionItemClass
+        [Item
             switchItemWithTitle:@"Playback Client Spoof"
-            titleDescription:@"Fix the playback issues by spoofing the YouTube client to TV Simply and using an experimental PoToken bypass, but you will probably not be able to watch restricted videos (i.e age restricted videos; YouFixPlaybackIssues by AppropriateNet)."
+            titleDescription:
+                @"Spoof the YouTube playback client to fix playback issues."
             accessibilityIdentifier:@"YTPlaybackFixSpoof"
             switchOn:YTPlaybackFixSpoofEnabled()
             switchBlock:^BOOL (YTSettingsCell *cell, BOOL enabled) {
@@ -209,17 +226,72 @@ accessibilityIdentifier:nil
 
     [sectionItems addObject:spoofItem];
 
-
     /* ------------------------------------------------------------------------
-     * Add section to YouTube Settings
+     * Playback Client picker
      * ---------------------------------------------------------------------- */
 
-    YTSettingsViewController *settingsViewController =
-        [self valueForKey:@"_dataDelegate"];
+    YTSettingsSectionItem *clientItem =
+        [Item
+            itemWithTitle:@"Playback Client"
+            titleDescription:YTPlaybackFixClientTitle()
+            accessibilityIdentifier:@"YTPlaybackFixSpoofClient"
+            detailTextBlock:nil
+            selectBlock:^BOOL (YTSettingsCell *cell,
+                               NSUInteger arg1) {
 
-    if (!settingsViewController)
-        return;
+                NSArray<NSString *> *titles = @[
+                    @"TV Simply",
+                    @"TV_SABR"
+                ];
 
+                NSMutableArray *rows =
+                    [NSMutableArray array];
+
+                for (NSInteger i = 0;
+                     i < (NSInteger)titles.count;
+                     i++) {
+
+                    NSInteger selectedIndex = i;
+
+                    YTSettingsSectionItem *row =
+                        [Item
+                            checkmarkItemWithTitle:titles[i]
+                            selectBlock:^BOOL (
+                                YTSettingsCell *pickerCell,
+                                NSUInteger pickerArg) {
+
+                                [[NSUserDefaults standardUserDefaults]
+                                    setInteger:selectedIndex
+                                    forKey:YTPlaybackFixSpoofClientModeKey];
+
+                                return YES;
+                            }];
+
+                    [rows addObject:row];
+                }
+
+                YTSettingsPickerViewController *picker =
+                    [[%c(YTSettingsPickerViewController) alloc]
+                        initWithNavTitle:@"Playback Client"
+                        pickerSectionTitle:nil
+                        rows:rows
+                        selectedItemIndex:
+                            YTPlaybackFixSpoofClientMode()
+                        parentResponder:settingsViewController];
+
+                [settingsViewController.navigationController
+                    pushViewController:picker
+                    animated:YES];
+
+                return YES;
+            }];
+
+    [sectionItems addObject:clientItem];
+
+
+    /* ------------------------------------------------------------------------
+     * Register section
+     * ---------------------------------------------------------------------- */
 
     if ([settingsViewController
             respondsToSelector:@selector(
@@ -231,11 +303,6 @@ accessibilityIdentifier:nil
                 headerHidden:)])
     {
         YTIIcon *icon = [%c(YTIIcon) new];
-
-        /*
-         * Play button icon.
-         * YT_SETTINGS is the standard YouTube settings icon.
-         */
         icon.iconType = YT_PLAY_ARROW_OUTLINED;
 
         [settingsViewController
@@ -259,16 +326,14 @@ accessibilityIdentifier:nil
 
 
 /* ============================================================================
- * Section update dispatcher
- * ========================================================================== */
+ * Section dispatcher
+ * ============================================================================ */
 
 - (void)updateSectionForCategory:(NSUInteger)category
-                      withEntry:(id)entry
+                       withEntry:(id)entry
 {
     if (category == TweakSection) {
-
         [self updateYTPlaybackFixSectionWithEntry:entry];
-
         return;
     }
 
