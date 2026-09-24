@@ -168,7 +168,7 @@ static NSString *YTPlaybackFixClientTitle(void)
      * ---------------------------------------------------------------------- */
 
     YTSettingsSectionItem *version =
-        [Item itemWithTitle:@"YTPlaybackFix v1.1 by Mark02-2012"
+        [Item itemWithTitle:@"YTPlaybackFix v1.2b1 by Mark02-2012"
            titleDescription:nil
         accessibilityIdentifier:nil
             detailTextBlock:nil
