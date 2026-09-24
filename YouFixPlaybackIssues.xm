@@ -1,6 +1,7 @@
 /*===========================================================================
- * YouFixPlaybackIssues.xm
- * Versione completa con selezione dinamica TV Simply / TV_SABR
+ * YouFixPlaybackIssues.xm (will change the name soon)
+ * Credits: github.com/MorpheApp/morphe-patches and
+ * github.com/AppropriateNet2928/YTLitePlusRenewed/YouFixPlaybackIssues
  *==========================================================================*/
 
 #import <Foundation/Foundation.h>
@@ -32,10 +33,10 @@ static NSString * const YTPlaybackFixSpoofClientModeKey = @"YTPlaybackFixSpoofCl
 
 
 // ============================================================================
-//                          PART 2: MORPHE PLAYBACK CLIENTS
+//                          PART 2: PLAYBACK CLIENTS
 // ============================================================================
 
-/* Parametri comuni a TV_SABR e TV_SIMPLY */
+/* Common parameters for TV_SABR and TV_SIMPLY */
 static NSString * const kMorpheDeviceMake     = @"Sony";
 static NSString * const kMorpheDeviceModel    = @"PS4";
 static NSString * const kMorpheOSName         = @"PlayStation 4";
