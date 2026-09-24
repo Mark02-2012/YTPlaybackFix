@@ -1,8 +1,8 @@
-/*===========================================================================
+/*================================================================================
  * YouFixPlaybackIssues.xm (will change the name soon)
  * Credits: github.com/MorpheApp/morphe-patches and
- * github.com/AppropriateNet2928/YTLitePlusRenewed/YouFixPlaybackIssues
- *==========================================================================*/
+ * github.com/AppropriateNet2928/YTLitePlusRenewed/tree/main/YouFixPlaybackIssues
+ *================================================================================*/
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
