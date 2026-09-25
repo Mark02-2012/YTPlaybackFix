@@ -1,6 +1,7 @@
 /*================================================================================
- * YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch v3.1
- * Only fix: removed invalid %orig calls that don't exist on GTMSessionFetcher
+ * YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch
+ * Credits: github.com/MorpheApp/morphe-patches and
+ * github.com/AppropriateNet2928/YTLitePlusRenewed/tree/main/YouFixPlaybackIssues
  *================================================================================*/
 
 #import <Foundation/Foundation.h>
@@ -26,8 +27,8 @@ static NSString * const kJSONKeyVisitorData   = @"visitorData";
 static NSString * const kJSONKeyVideoId       = @"videoId";
 static NSString * const kJSONKeyBrowseId      = @"browseId";
 static NSString * const kJSONKeyContinuation  = @"continuation";
+
 static NSString * const kJSONKeyStreamingData = @"streamingData";
-static NSString * const kJSONKeyPlayerConfig  = @"playerConfig";
 
 static NSString * const YTPlaybackFixSpoofEnabledKey   = @"YTPlaybackFixSpoofEnabled";
 static NSString * const YTPlaybackFixSpoofClientModeKey = @"YTPlaybackFixSpoofClientMode";
@@ -37,6 +38,7 @@ static NSString * const YTPlaybackFixSpoofClientModeKey = @"YTPlaybackFixSpoofCl
 //                          PART 2: PLAYBACK CLIENTS
 // ============================================================================
 
+/* Common parameters for TV_SABR and TV_SIMPLY */
 static NSString * const kMorpheDeviceMake     = @"Sony";
 static NSString * const kMorpheDeviceModel    = @"PS4";
 static NSString * const kMorpheOSName         = @"PlayStation 4";
@@ -48,10 +50,12 @@ static NSString * const kMorpheUserAgent =
     @"LeanbackShell/01.00.01.75 "
     @"Sony PS4/ (PS4, , no, CH)";
 
+/* TV_SABR */
 static NSString * const kTVSABRClientName     = @"TVHTML5";
 static NSString * const kTVSABRClientVersion  = @"7.20260707.07.00";
 static NSString * const kTVSABRNumericClient  = @"7";
 
+/* TV_SIMPLY */
 static NSString * const kTVSimplyClientName    = @"TVHTML5_SIMPLY";
 static NSString * const kTVSimplyClientVersion = @"1.1";
 static NSString * const kTVSimplyNumericClient = @"75";
@@ -63,8 +67,13 @@ static NSString * const kTVSimplyNumericClient = @"75";
 
 static BOOL YTPlaybackFixSpoofEnabled(void)
 {
-    NSUserDefaults *defaults = [ UserDefaults.standardUserDefaults];
+    NSUserDefaults *defaults =
+        [UserDefaults.standardUserDefaults];
 
+    /*
+     * Deve corrispondere al default di Settings.xm.
+     * Se la chiave non esiste, lo spoof rimane attivo.
+     */
     if (![defaults forKey:YTPlaybackFixSpoofEnabledKey]) {
         return YES;
     }
@@ -74,8 +83,14 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 
 static Integer YTPlaybackFixSpoofClientMode(void)
 {
-    NSUserDefaults *defaults = [ UserDefaults.standardUserDefaults];
+    NSUserDefaults *defaults =
+        [UserDefaults.standardUserDefaults];
 
+    /*
+     * 0 = TV Simply
+     * 1 = TV_SABR
+     * Qualsiasi valore non valido viene riportato a TV Simply.
+     */
     if (![defaults forKey:YTPlaybackFixSpoofClientModeKey]) {
         return 0;
     }
@@ -135,25 +150,7 @@ static NSDictionary *YTPlaybackFixClientContext(void)
 
 
 // ============================================================================
-//                          PART 4: LOGGING
-// ============================================================================
-
-static NSString * const kYTLogPrefix = @"[YouFixPlayback] ";
-
-static void YTLog(NSString *format, ...)
-{
-    if (!YTPlaybackFixSpoofEnabled()) return;
-
-    va_list args;
-    va_start(args, format);
-    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
-    va_end(args);
-    NSLog(@"%@{}", kYTLogPrefix, message);
-}
-
-
-// ============================================================================
-//                          PART 5: YTIClientInfo SWIZZLE (LAYER 1)
+//                          PART 4: YTIClientInfo SWIZZLE (NEW)
 // ============================================================================
 
 %hook YTIClientInfo
@@ -173,7 +170,7 @@ static void YTLog(NSString *format, ...)
             [self setValue:@"UTC" forKeyPath:@"timeZone"];
             [self setValue:@(0) forKeyPath:@"utcOffsetMinutes"];
         } @catch (NSException *e) {
-            YTLog(@"YTIClientInfo KVC failed: {}", e.reason);
+            // KVC may not work on protobuf internals
         }
     }
     return self;
@@ -194,23 +191,7 @@ static void YTLog(NSString *format, ...)
 
 
 // ============================================================================
-//                          PART 6: YTIIosPlaybackOnesieConfig
-// ============================================================================
-
-%hook YTIIosPlaybackOnesieConfig
-
-- (BOOL)hasCommonConfig {
-    if (!YTPlaybackFixSpoofEnabled()) {
-        return %orig;
-    }
-    return NO;
-}
-
-%end
-
-
-// ============================================================================
-//                          PART 7: INNERTUBE SESSION
+//                          PART 5: INNERTUBE SESSION
 // ============================================================================
 
 @interface YTDirectPlaybackClient : NSObject
@@ -290,11 +271,11 @@ static void YTLog(NSString *format, ...)
         return nil;
     }
 
-   NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
+    NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
 
     NSDictionary *incomingContext = incomingBody[kJSONKeyContext];
 
-  NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
+   NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
         ? [incomingContext mutableCopy]
         : [NSMutableDictionary dictionary];
 
@@ -312,7 +293,7 @@ static void YTLog(NSString *format, ...)
         }
     }
 
-  NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
+   NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
 
     if (self.visitorData.length > 0) {
         client[kJSONKeyVisitorData] = self.visitorData;
@@ -321,7 +302,7 @@ static void YTLog(NSString *format, ...)
     mutableContext[kJSONKeyClient] = [client copy];
     mutatedBody[kJSONKeyContext] = [mutableContext copy];
 
-    // Force alt=json
+    // Force alt=json in the request
     mutatedBody Alt = @"json";
 
     return [mutatedBody copy];
@@ -331,7 +312,7 @@ static void YTLog(NSString *format, ...)
 
 
 // ============================================================================
-//                          PART 8: URL HELPERS
+//                          PART 6: URL HELPERS
 // ============================================================================
 
 static BOOL YTPathContains(NSURL *URL, NSString *endpoint)
@@ -413,7 +394,7 @@ static NSString *YTReplaceQueryParameter(NSString *urlString, NSString *paramete
 
     NSString *separator = [baseString containsString:@"?"] ? @"&" : @"?";
 
-    return [NSString:@"%@%@%@=%@%@", baseString, separator, parameter, value, fragmentString];
+    return [NSString:@"%@%@%@=%@{}", baseString, separator, parameter, value, fragmentString];
 }
 
 static NSURL *YTRewriteInnertubeURL(NSURL *URL)
@@ -442,7 +423,7 @@ static NSURL *YTRewriteVideoPlaybackURL(NSURL *URL)
 
 
 // ============================================================================
-//                          PART 9: REQUEST MUTATION
+//                          PART 7: REQUEST MUTATION
 // ============================================================================
 
 static void YTApplyCustomHeaders(NSMutableURLRequest *request)
@@ -472,7 +453,6 @@ static BOOL YTApplyCustomBody(NSMutableURLRequest *request)
     NSString *contentType = [request valueForHTTPHeaderField:@"Content-Type"] ?: @"";
 
     if ([contentType.lowercaseString containsString:@"protobuf"]) {
-        YTLog(@"Request is protobuf, cannot modify body");
         return NO;
     }
 
@@ -506,8 +486,6 @@ static BOOL YTApplyCustomBody(NSMutableURLRequest *request)
     request.HTTPBody = mutatedData;
 
     [request setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
-
-    YTLog(@"Mutated JSON body for {}", request.URL.path);
 
     return YES;
 }
@@ -559,7 +537,7 @@ static void YTApplyPlaybackSpoof(NSMutableURLRequest *request)
 
 
 // ============================================================================
-//                          PART 10: RESPONSE STREAMING DATA REPLACEMENT
+//                          PART 8: RESPONSE STREAMING DATA REPLACEMENT (NEW)
 // ============================================================================
 
 // Helper: creates TV-compatible formats
@@ -606,24 +584,16 @@ static NSArray *YTCreateTVFormats(NSString *videoId)
         }
     }
 
-    YTLog(@"Created {} TV formats for videoId: {}", (unsigned long)formats.count, videoId);
-
     return formats;
 }
 
 static YTIStreamingData *YTCreateTVStreamingData(NSString *videoId)
 {
     Class streamingDataClass = NSClassFromString(YTIStreamingData);
-    if (!streamingDataClass) {
-        YTLog(YTIStreamingData class not found);
-        return nil;
-    }
+    if (!streamingDataClass) return nil;
 
     id tvData = [[streamingDataClass alloc] init];
-    if (!tvData) {
-        YTLog(Failed to alloc YTIStreamingData);
-        return nil;
-    }
+    if (!tvData) return nil;
 
     NSArray *formats = YTCreateTVFormats(videoId);
     if (formats.count > 0) {
@@ -652,16 +622,25 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
 
 
 // ============================================================================
-//                          PART 11: HOOKS - REQUEST INTERCEPTION (SAFE ONLY)
+//                          PART 9: HOOKS (ORIGINAL - UNCHANGED)
 // ============================================================================
 
-%hook NSThread
+%hookNSMutableURLRequest
 
-- (void)start {
-    %orig;
+- (idinitWithURL:(NSURL *)URL cachePolicy:(unsigned long long)cachePolicy timeoutInterval:(double)timeoutInterval
+{
+    self = %orig;
+    if (!self) return self;
+    YTApplyPlaybackSpoof(self);
+    return self;
 }
 
 %end
+
+
+@interface GTMSessionFetcher : NSObject
+- (id)mutableRequestForTesting;
+@end
 
 %hook GTMSessionFetcher
 
@@ -671,7 +650,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     if (![request isinstance:[NSURLRequest class]]) return %orig(request);
     if (!YTShouldMutateRequest((NSURLRequest *)request)) return %orig(request);
 
-  NSMutableURLRequest *mutableRequest = nil;
+ NSMutableURLRequest *mutableRequest = nil;
     if ([request isinstance:[NSMutableURLRequest class]]) {
         mutableRequest = (NSMutableURLRequest *)request;
     } else {
@@ -684,42 +663,271 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     return %orig(request);
 }
 
-- (idinitWithRequest:(id)request configuration:(id)configuration
+- (idinitWithRequest:(id)request
+      configuration:(id)configuration
 {
-    if (!YTPlaybackFixSpoofEnabled()) return %orig(request, configuration);
-    if (![request isinstance:[NSURLRequest class]]) return %orig(request, configuration);
-    if (!YTShouldMutateRequest((NSURLRequest *)request)) return %orig(request, configuration);
-
-  NSMutableURLRequest *mutableRequest = nil;
-    if ([request isinstance:[NSMutableURLRequest class]]) {
-        mutableRequest = (NSMutableURLRequest *)request;
-    } else {
-        mutableRequest = [(NSURLRequest *)request mutableCopy];
+    if (!YTPlaybackFixSpoofEnabled()) {
+        return %orig(request, configuration);
     }
-    if (!mutableRequest) return %orig(request, configuration);
+
+    if (![request isinstance:[NSURLRequest class]]) {
+        return %orig(request, configuration);
+    }
+
+    if (!YTShouldMutateRequest((NSURLRequest *)request)) {
+        return %orig(request, configuration);
+    }
+
+ NSMutableURLRequest *mutableRequest = nil;
+
+    if ([request
+            isinstance:[NSMutableURLRequest class]])
+    {
+        mutableRequest =
+            (NSMutableURLRequest *)request;
+    }
+    else
+    {
+        mutableRequest =
+            [(NSURLRequest *)request mutableCopy];
+    }
+
+    if (!mutableRequest) {
+        return %orig(request, configuration);
+    }
 
     YTApplyPlaybackSpoof(mutableRequest);
+
     request = mutableRequest;
+
     return %orig(request, configuration);
+}
+
+- (void)updateMutableRequest:(id)request
+{
+    if (!YTPlaybackFixSpoofEnabled()) {
+        %orig(request);
+        return;
+    }
+
+    if (![request
+            isinstance:[NSMutableURLRequest class]])
+    {
+        %orig(request);
+        return;
+    }
+
+    YTApplyPlaybackSpoof(
+        (NSMutableURLRequest *)request
+    );
+
+    %orig(request);
+}
+
+- (void)setRequestValue:(id)value
+       forHTTPHeaderField:(id)field
+{
+    if (!YTPlaybackFixSpoofEnabled()) {
+        %orig(value, field);
+        return;
+    }
+
+    if (![self
+            respondsTo:
+                @selector(mutableRequestForTesting)])
+    {
+        %orig(value, field);
+        return;
+    }
+
+ NSMutableURLRequest *request =
+        [self mutableRequestForTesting];
+
+    if (!request) {
+        %orig(value, field);
+        return;
+    }
+
+    BOOL shouldMutate =
+        YTShouldMutateRequest(request);
+
+    /*
+     * Prima esegue il setter originale, poi ripristina gli header.
+     */
+    %orig(value, field);
+
+    if (shouldMutate)
+    {
+        YTApplyURLSpoof(request);
+        YTApplyCustomHeaders(request);
+    }
+}
+
+- (void)setBodyData:(id)data
+{
+    if (!YTPlaybackFixSpoofEnabled()) {
+        %orig(data);
+        return;
+    }
+
+    if (![self
+            respondsTo:
+                @selector(mutableRequestForTesting)])
+    {
+        %orig(data);
+        return;
+    }
+
+ NSMutableURLRequest *request =
+        [self mutableRequestForTesting];
+
+    if (!request) {
+        %orig(data);
+        return;
+    }
+
+    BOOL shouldMutate =
+        request.URL &&
+        YTIsInnertubeRequest(request.URL);
+
+    /*
+     * Prima installa il body originale, poi lo riscrive.
+     */
+    %orig(data);
+
+    if (shouldMutate)
+    {
+        YTApplyCustomBody(request);
+        YTApplyCustomHeaders(request);
+        YTApplyURLSpoof(request);
+    }
+}
+
+%end
+
+
+%hook GTMSessionFetcherSessionDelegateDispatcher
+
+- (id)connection:(id)connection
+willSendRequest:(id)request
+redirectResponse:(id)redirectResponse
+{
+    if (!YTPlaybackFixSpoofEnabled()) {
+        return %orig(connection, request, redirectResponse);
+    }
+
+    if (![request isinstance:[NSURLRequest class]]) {
+        return %orig(connection, request, redirectResponse);
+    }
+
+    if (!YTShouldMutateRequest((NSURLRequest *)request)) {
+        return %orig(connection, request, redirectResponse);
+    }
+
+ NSMutableURLRequest *mutableRequest =
+        [(NSURLRequest *)request mutableCopy];
+
+    if (!mutableRequest) {
+        return %orig(connection, request, redirectResponse);
+    }
+
+    YTApplyPlaybackSpoof(mutableRequest);
+
+    request = mutableRequest;
+
+    return %orig(connection, request, redirectResponse);
+}
+
+- (void)URLSession:(id)session
+              task:(id)task
+willPerformHTTPRedirection:(id)response
+        newRequest:(id)newRequest
+ completionHandler:(id)completionHandler
+{
+    if (!YTPlaybackFixSpoofEnabled()) {
+        %orig(session, task, response, newRequest,
+              completionHandler);
+        return;
+    }
+
+    if (![newRequest
+            isinstance:[NSURLRequest class]])
+    {
+        %orig(session, task, response, newRequest,
+              completionHandler);
+        return;
+    }
+
+    if (!YTShouldMutateRequest((NSURLRequest *)newRequest)) {
+        %orig(session, task, response, newRequest,
+              completionHandler);
+        return;
+    }
+
+ NSMutableURLRequest *mutableRequest =
+        [(NSURLRequest *)newRequest mutableCopy];
+
+    if (!mutableRequest) {
+        %orig(session, task, response, newRequest,
+              completionHandler);
+        return;
+    }
+
+    YTApplyPlaybackSpoof(mutableRequest);
+
+    newRequest = mutableRequest;
+
+    %orig(session, task, response, newRequest,
+          completionHandler);
+}
+
+- (void)URLSession:(id)session
+              task:(id)task
+ needNewBodyStream:(id)completionHandler
+{
+    %orig(session, task, completionHandler);
 }
 
 %end
 
 
 // ============================================================================
-//                    PART 12: RESPONSE HOOKS (LAYER 2 - STREAMING DATA)
+//                    PART 10: EXPERIMENTAL PoToken HOOK
+// ============================================================================
+
+@interface YTIIosPlaybackOnesieConfig : GPBMessage
+- (BOOL)hasCommonConfig;
+@end
+
+%hook YTIIosPlaybackOnesieConfig
+
+- (BOOL)hasCommonConfig
+{
+    /*
+     * Il comportamento sperimentale viene disattivato insieme
+     * allo spoof principale.
+     */
+    if (!YTPlaybackFixSpoofEnabled()) {
+        return %orig;
+    }
+
+    return NO;
+}
+
+%end
+
+
+// ============================================================================
+//                    PART 11: NEW HOOKS - STREAMING DATA REPLACEMENT
 // ============================================================================
 
 %hook YTPlayerResponse
 
 - (void)setStreamingData:(id)streamingData {
     if (YTPlaybackFixSpoofEnabled()) {
-        YTLog(YTPlayerResponse.setStreamingData called);
-
-        // Try to extract videoId from request
         NSString *videoId = nil;
 
-        // Method 1: try player config
+        // Try to extract videoId from player config
         SEL playerConfigSel = NSSelectorFromString(playerConfig);
         if ([self respondsTo:playerConfigSel]) {
             id playerConfig = ((id (*)(id, SEL))objc_msgSend)(self, playerConfigSel);
@@ -731,7 +939,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
             }
         }
 
-        // Method 2: try videoDetails
+        // Try videoDetails
         if (!videoId) {
             SEL videoDetailsSel = NSSelectorFromString(videoDetails);
             if ([self respondsTo:videoDetailsSel]) {
@@ -751,7 +959,6 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
 
         YTIStreamingData *tvStreamingData = YTCreateTVStreamingData(videoId);
         if (tvStreamingData) {
-            YTLog(Replacing streamingData with TV formats for videoId: {}", videoId);
             %orig(tvStreamingData);
             return;
         }
@@ -762,7 +969,6 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
 - (id)streamingData {
     id original = %orig;
     if (YTPlaybackFixSpoofEnabled() && (!original || [[original adaptiveFormatsArray] count] == 0)) {
-        YTLog(Original streamingData empty, creating TV fallback);
         return YTCreateTVStreamingData(unknown);
     }
     return original;
@@ -771,40 +977,15 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
 %end
 
 
-// ============================================================================
-//                    PART 13: YTIStreamingData HOOK (Logging)
-// ============================================================================
-
 %hook YTIStreamingData
 
 - (NSArray *)adaptiveFormatsArray {
     NSArray *formats = %orig;
-    YTLog(YTIStreamingData.adaptiveFormatsArray = {}, (unsigned long)[formats count]);
-    if ([formats count] > 0) {
-        id first = formats[0];
-        YTLog(  First format class: {}",NSStringFromClass([first class]));
-
-        SEL urlSel = NSSelectorFromString(URL);
-        SEL cipherSel = NSSelectorFromString(signatureCipher);
-
-        if ([first respondsTo:urlSel]) {
-            NSString *url = ((id (*)(id, SEL))objc_msgSend)(first, urlSel);
-            YTLog(  format.URL = {}", url);
-        }
-        if ([first respondsTo:cipherSel]) {
-            NSString *cipher = ((id (*)(id, SEL))objc_msgSend)(first, cipherSel);
-            YTLog(  format.signatureCipher = {}", cipher ? YES : NO);
-        }
-    }
     return formats;
 }
 
 %end
 
-
-// ============================================================================
-//                    PART 14: YTPlayabilityStatus HOOK
-// ============================================================================
 
 %hook YTIPlayabilityStatus
 
