@@ -1,10 +1,10 @@
 /*================================================================================
  * YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch v3.1
- * Fixed: removed invalid %orig calls, only hooks existing methods
+ * Only fix: removed invalid %orig calls that don't exist on GTMSessionFetcher
  *================================================================================*/
 
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import <UIKit/Foundation.h>
 #import <objc/runtime.h>
 #import <objc/NSObjCRuntime.h>
 #import "GPBMessage.h"
@@ -63,7 +63,7 @@ static NSString * const kTVSimplyNumericClient = @"75";
 
 static BOOL YTPlaybackFixSpoofEnabled(void)
 {
-    NSUserDefaults *defaults = [UserDefaults.standardUserDefaults];
+    NSUserDefaults *defaults = [ UserDefaults.standardUserDefaults];
 
     if (![defaults forKey:YTPlaybackFixSpoofEnabledKey]) {
         return YES;
@@ -74,7 +74,7 @@ static BOOL YTPlaybackFixSpoofEnabled(void)
 
 static Integer YTPlaybackFixSpoofClientMode(void)
 {
-    NSUserDefaults *defaults = [UserDefaults.standardUserDefaults];
+    NSUserDefaults *defaults = [ UserDefaults.standardUserDefaults];
 
     if (![defaults forKey:YTPlaybackFixSpoofClientModeKey]) {
         return 0;
@@ -229,7 +229,7 @@ static void YTLog(NSString *format, ...)
         return @{};
     }
 
-    NSMutableDictionary *headers = [NSMutableDictionary dictionary];
+   NSMutableDictionary *headers = [NSMutableDictionary dictionary];
 
     headers Accept-Language = @"*";
     headers X-YouTube-Client-Name = YTPlaybackFixNumericClient();
@@ -290,11 +290,11 @@ static void YTLog(NSString *format, ...)
         return nil;
     }
 
-    NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
+   NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
 
     NSDictionary *incomingContext = incomingBody[kJSONKeyContext];
 
-   NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
+  NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
         ? [incomingContext mutableCopy]
         : [NSMutableDictionary dictionary];
 
@@ -312,7 +312,7 @@ static void YTLog(NSString *format, ...)
         }
     }
 
-   NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
+  NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
 
     if (self.visitorData.length > 0) {
         client[kJSONKeyVisitorData] = self.visitorData;
@@ -454,7 +454,7 @@ static void YTApplyCustomHeaders(NSMutableURLRequest *request)
     NSDictionary *headers = [YTDirectPlaybackClient
         apiHeadersForVisitorData:[YTInnertubeSession sharedSession].visitorData];
 
-    [headers enumerateKeysAndObjectsUsingBlock:^{
+    [headers enumerateKeysAndObjectsUsingBlock:{
         [request setValue:value forHTTPHeaderField:key];
     }];
 }
@@ -671,7 +671,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     if (![request isinstance:[NSURLRequest class]]) return %orig(request);
     if (!YTShouldMutateRequest((NSURLRequest *)request)) return %orig(request);
 
-   NSMutableURLRequest *mutableRequest = nil;
+  NSMutableURLRequest *mutableRequest = nil;
     if ([request isinstance:[NSMutableURLRequest class]]) {
         mutableRequest = (NSMutableURLRequest *)request;
     } else {
@@ -690,7 +690,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     if (![request isinstance:[NSURLRequest class]]) return %orig(request, configuration);
     if (!YTShouldMutateRequest((NSURLRequest *)request)) return %orig(request, configuration);
 
-   NSMutableURLRequest *mutableRequest = nil;
+  NSMutableURLRequest *mutableRequest = nil;
     if ([request isinstance:[NSMutableURLRequest class]]) {
         mutableRequest = (NSMutableURLRequest *)request;
     } else {
@@ -721,11 +721,11 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
 
         // Method 1: try player config
         SEL playerConfigSel = NSSelectorFromString(playerConfig);
-        if ([self respondsToSelector:playerConfigSel]) {
+        if ([self respondsTo:playerConfigSel]) {
             id playerConfig = ((id (*)(id, SEL))objc_msgSend)(self, playerConfigSel);
             if (playerConfig) {
                 SEL videoIdSel = NSSelectorFromString(videoId);
-                if ([playerConfig respondsToSelector:videoIdSel]) {
+                if ([playerConfig respondsTo:videoIdSel]) {
                     videoId = ((id (*)(id, SEL))objc_msgSend)(playerConfig, videoIdSel);
                 }
             }
@@ -734,11 +734,11 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
         // Method 2: try videoDetails
         if (!videoId) {
             SEL videoDetailsSel = NSSelectorFromString(videoDetails);
-            if ([self respondsToSelector:videoDetailsSel]) {
+            if ([self respondsTo:videoDetailsSel]) {
                 id videoDetails = ((id (*)(id, SEL))objc_msgSend)(self, videoDetailsSel);
                 if (videoDetails) {
                     SEL videoIdSel = NSSelectorFromString(videoId);
-                    if ([videoDetails respondsToSelector:videoIdSel]) {
+                    if ([videoDetails respondsTo:videoIdSel]) {
                         videoId = ((id (*)(id, SEL))objc_msgSend)(videoDetails, videoIdSel);
                     }
                 }
@@ -782,16 +782,16 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     YTLog(YTIStreamingData.adaptiveFormatsArray = {}, (unsigned long)[formats count]);
     if ([formats count] > 0) {
         id first = formats[0];
-        YTLog(  First format class: {}", NSStringFromClass([first class]));
+        YTLog(  First format class: {}",NSStringFromClass([first class]));
 
         SEL urlSel = NSSelectorFromString(URL);
         SEL cipherSel = NSSelectorFromString(signatureCipher);
 
-        if ([first respondsToSelector:urlSel]) {
+        if ([first respondsTo:urlSel]) {
             NSString *url = ((id (*)(id, SEL))objc_msgSend)(first, urlSel);
             YTLog(  format.URL = {}", url);
         }
-        if ([first respondsToSelector:cipherSel]) {
+        if ([first respondsTo:cipherSel]) {
             NSString *cipher = ((id (*)(id, SEL))objc_msgSend)(first, cipherSel);
             YTLog(  format.signatureCipher = {}", cipher ? YES : NO);
         }
