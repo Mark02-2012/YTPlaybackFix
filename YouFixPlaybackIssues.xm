@@ -1,8 +1,8 @@
 // ================================================================================
- * YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch
- * Credits: github.com/MorpheApp/morphe-patches and
- * github.com/AppropriateNet2928/YTLitePlusRenewed/tree/main/YouFixPlaybackIssues
- *================================================================================ //
+// YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch
+// Credits: github.com/MorpheApp/morphe-patches and
+// github.com/AppropriateNet2928/YTLitePlusRenewed/tree/main/YouFixPlaybackIssues
+// ================================================================================ //
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
