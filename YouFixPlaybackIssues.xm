@@ -1,4 +1,4 @@
-/*================================================================================
+#================================================================================
  * YouFixPlaybackIssues.xm - Complete TV Client Spoofing Patch
  * Credits: github.com/MorpheApp/morphe-patches and
  * github.com/AppropriateNet2928/YTLitePlusRenewed/tree/main/YouFixPlaybackIssues
@@ -38,7 +38,6 @@ static NSString * const YTPlaybackFixSpoofClientModeKey = @"YTPlaybackFixSpoofCl
 //                          PART 2: PLAYBACK CLIENTS
 // ============================================================================
 
-/* Common parameters for TV_SABR and TV_SIMPLY */
 static NSString * const kMorpheDeviceMake     = @"Sony";
 static NSString * const kMorpheDeviceModel    = @"PS4";
 static NSString * const kMorpheOSName         = @"PlayStation 4";
@@ -50,12 +49,10 @@ static NSString * const kMorpheUserAgent =
     @"LeanbackShell/01.00.01.75 "
     @"Sony PS4/ (PS4, , no, CH)";
 
-/* TV_SABR */
 static NSString * const kTVSABRClientName     = @"TVHTML5";
 static NSString * const kTVSABRClientVersion  = @"7.20260707.07.00";
 static NSString * const kTVSABRNumericClient  = @"7";
 
-/* TV_SIMPLY */
 static NSString * const kTVSimplyClientName    = @"TVHTML5_SIMPLY";
 static NSString * const kTVSimplyClientVersion = @"1.1";
 static NSString * const kTVSimplyNumericClient = @"75";
@@ -148,7 +145,6 @@ static NSDictionary *YTPlaybackFixClientContext(void)
             [self setValue:@"UTC" forKeyPath:@"timeZone"];
             [self setValue:@(0) forKeyPath:@"utcOffsetMinutes"];
         } @catch (NSException *e) {
-            // KVC may not work on protobuf internals
         }
     }
     return self;
@@ -244,11 +240,8 @@ static NSDictionary *YTPlaybackFixClientContext(void)
         return nil;
     }
 
-  NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
+ NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
     NSDictionary *incomingContext = incomingBody[kJSONKeyContext];
- NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
-        ? [incomingContext mutableCopy]
-        : [NSMutableDictionary dictionary];
     NSDictionary *incomingClient = incomingContext[kJSONKeyClient];
 
     if ([incomingClient isinstance:[NSDictionary class]]) {
@@ -283,7 +276,7 @@ static BOOL YTPathContains(NSURL *URL, NSString *endpoint)
     if (!URL || !endpoint || endpoint.length == 0) {
         return NO;
     }
-    NSString *path = URL.path ?: @_;
+    NSString *path = URL.path ?: nil;
     return [path.lowercaseString containsString:endpoint.lowercaseString];
 }
 
@@ -348,7 +341,7 @@ static NSString *YTReplaceQueryParameter(NSString *urlString, NSString *paramete
         ? @""
         : [urlString substringFromIndex:fragmentRange.location];
     NSString *separator = [baseString containsString:@"?"] ? @"&" : @"?";
-    return [NSString:@"%@%@%@=%@{}", baseString, separator, parameter, value, fragmentString];
+    return [NSString %@%@%@=%@{}", baseString, separator, parameter, value, fragmentString];
 }
 
 static NSURL *YTRewriteInnertubeURL(NSURL *URL)
@@ -472,7 +465,6 @@ static NSArray *YTCreateTVFormats(NSString *videoId)
 {
     NSMutableArray *formats = [NSMutableArray array];
 
-    // Video 1080p HLS (iOS compatible)
     id video1080 = [[NSClassFromString(YTIFormatStream) alloc] init];
     if (video1080) {
         [video1080 setURL:[NSString:@"https://manifest.googlevideo.com/api/manifest/hls_variant/playlist/index.m3u8?video_id=%@", videoId]];
@@ -484,7 +476,6 @@ static NSArray *YTCreateTVFormats(NSString *videoId)
         [formats addObject:video1080];
     }
 
-    // Video 720p
     id video720 = [[NSClassFromString(YTIFormatStream) alloc] init];
     if (video720) {
         video720 = [video720 init];
@@ -499,7 +490,6 @@ static NSArray *YTCreateTVFormats(NSString *videoId)
         }
     }
 
-    // Audio
     id audio = [[NSClassFromString(YTIFormatStream) alloc] init];
     if (audio) {
         audio = [audio init];
