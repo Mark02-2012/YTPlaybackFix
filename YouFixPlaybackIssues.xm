@@ -188,7 +188,7 @@ static NSDictionary *YTPlaybackFixClientContext(void)
         return @{};
     }
 
-   NSMutableDictionary *headers = [NSMutableDictionary dictionary];
+  NSMutableDictionary *headers = [NSMutableDictionary dictionary];
     headers Accept-Language = @"*";
     headers X-YouTube-Client-Name = YTPlaybackFixNumericClient();
     headers X-YouTube-Client-Version = YTPlaybackFixClientVersion();
@@ -244,9 +244,9 @@ static NSDictionary *YTPlaybackFixClientContext(void)
         return nil;
     }
 
-   NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
+  NSMutableDictionary *mutatedBody = [incomingBody mutableCopy];
     NSDictionary *incomingContext = incomingBody[kJSONKeyContext];
-  NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
+ NSMutableDictionary *mutableContext = [incomingContext isinstance:[NSDictionary class]]
         ? [incomingContext mutableCopy]
         : [NSMutableDictionary dictionary];
     NSDictionary *incomingClient = incomingContext[kJSONKeyClient];
@@ -261,7 +261,7 @@ static NSDictionary *YTPlaybackFixClientContext(void)
         }
     }
 
-  NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
+ NSMutableDictionary *client = [[YTDirectPlaybackClient activeClientContext] mutableCopy];
     if (self.visitorData.length > 0) {
         client[kJSONKeyVisitorData] = self.visitorData;
     }
@@ -395,7 +395,7 @@ static BOOL YTApplyCustomBody(NSMutableURLRequest *request)
     if (!YTIsInnertubeRequest(request.URL)) {
         return NO;
     }
-    NSString *contentType = [request valueForHTTPHeaderField:@"Content-Type"] ?: @_;
+    NSString *contentType = [request valueForHTTPHeaderField:@"Content-Type"] ?: @"application/json";
     if ([contentType.lowercaseString containsString:@"protobuf"]) {
         return NO;
     }
@@ -572,7 +572,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
     if (![request isinstance:[NSURLRequest class]]) return %orig(request);
     if (!YTShouldMutateRequest((NSURLRequest *)request)) return %orig(request);
 
-  NSMutableURLRequest *mutableRequest = nil;
+ NSMutableURLRequest *mutableRequest = nil;
     if ([request isinstance:[NSMutableURLRequest class]]) {
         mutableRequest = (NSMutableURLRequest *)request;
     } else {
@@ -597,7 +597,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
         return %orig(request, configuration);
     }
 
-  NSMutableURLRequest *mutableRequest = nil;
+ NSMutableURLRequest *mutableRequest = nil;
     if ([request
             isinstance:[NSMutableURLRequest class]])
     {
@@ -652,7 +652,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
         return;
     }
 
-  NSMutableURLRequest *request =
+ NSMutableURLRequest *request =
         [self mutableRequestForTesting];
 
     if (!request) {
@@ -686,7 +686,7 @@ static NSString *YTExtractVideoIdFromRequest(NSURL *URL)
         return;
     }
 
-  NSMutableURLRequest *request =
+ NSMutableURLRequest *request =
         [self mutableRequestForTesting];
 
     if (!request) {
@@ -727,7 +727,7 @@ redirectResponse:(id)redirectResponse
         return %orig(connection, request, redirectResponse);
     }
 
-  NSMutableURLRequest *mutableRequest =
+ NSMutableURLRequest *mutableRequest =
         [(NSURLRequest *)request mutableCopy];
 
     if (!mutableRequest) {
@@ -763,7 +763,7 @@ willPerformHTTPRedirection:(id)response
         return;
     }
 
-  NSMutableURLRequest *mutableRequest =
+ NSMutableURLRequest *mutableRequest =
         [(NSURLRequest *)newRequest mutableCopy];
 
     if (!mutableRequest) {
