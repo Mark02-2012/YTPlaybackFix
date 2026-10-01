@@ -1557,141 +1557,128 @@ willPerformHTTPRedirection:(id)response
 // STREAMING DATA REPLACEMENT
 // ============================================================================
 
+static id YTGetObjectProperty(id object, NSString *selectorName)
+{
+    if (!object || selectorName.length == 0) {
+        return nil;
+    }
+
+    SEL selector = NSSelectorFromString(selectorName);
+
+    if (![object respondsToSelector:selector]) {
+        return nil;
+    }
+
+    return ((id (*)(id, SEL))objc_msgSend)(
+        object,
+        selector
+    );
+}
+
+
+static NSString *YTGetVideoIdFromPlayerResponse(id response)
+{
+    if (!response) {
+        return nil;
+    }
+
+    id playerConfig =
+        YTGetObjectProperty(
+            response,
+            @"playerConfig"
+        );
+
+    if (playerConfig) {
+
+        id videoId =
+            YTGetObjectProperty(
+                playerConfig,
+                @"videoId"
+            );
+
+        if ([videoId isKindOfClass:[NSString class]] &&
+            [(NSString *)videoId length] > 0) {
+
+            return (NSString *)videoId;
+        }
+    }
+
+    id videoDetails =
+        YTGetObjectProperty(
+            response,
+            @"videoDetails"
+        );
+
+    if (videoDetails) {
+
+        id videoId =
+            YTGetObjectProperty(
+                videoDetails,
+                @"videoId"
+            );
+
+        if ([videoId isKindOfClass:[NSString class]] &&
+            [(NSString *)videoId length] > 0) {
+
+            return (NSString *)videoId;
+        }
+    }
+
+    return nil;
+}
+
+
 %hook YTPlayerResponse
 
 - (void)setStreamingData:(id)streamingData
 {
-    if (YTPlaybackFixSpoofEnabled()) {
+    if (!YTPlaybackFixSpoofEnabled()) {
+        %orig(streamingData);
+        return;
+    }
 
-        NSString *videoId = nil;
+    NSString *videoId =
+        YTGetVideoIdFromPlayerResponse(self);
 
-        SEL playerConfigSel =
-            NSSelectorFromString(
-                @"playerConfig"
-            );
+    if (videoId.length > 0) {
 
-        if ([self
-                respondsToSelector:
-                    playerConfigSel]) {
+        id replacement =
+            YTCreateTVStreamingData(videoId);
 
-            id playerConfig =
-                ((id (*)(id, SEL))objc_msgSend)(
-                    self,
-                    playerConfigSel
-                );
-
-            if (playerConfig) {
-
-                SEL videoIdSel =
-                    NSSelectorFromString(
-                        @"videoId"
-                    );
-
-                if ([playerConfig
-                        respondsToSelector:
-                            videoIdSel]) {
-
-                    videoId =
-                        ((id (*)(id, SEL))objc_msgSend)(
-                            playerConfig,
-                            videoIdSel
-                        );
-                }
-            }
-        }
-
-        if (!videoId) {
-
-            SEL videoDetailsSel =
-                NSSelectorFromString(
-                    @"videoDetails"
-                );
-
-            if ([self
-                    respondsToSelector:
-                        videoDetailsSel]) {
-
-                id videoDetails =
-                    ((id (*)(id, SEL))objc_msgSend)(
-                        self,
-                        videoDetailsSel
-                    );
-
-                if (videoDetails) {
-
-                    SEL videoIdSel =
-                        NSSelectorFromString(
-                            @"videoId"
-                        );
-
-                    if ([videoDetails
-                            respondsToSelector:
-                                videoIdSel]) {
-
-                        videoId =
-                            ((id (*)(id, SEL))objc_msgSend)(
-                                videoDetails,
-                                videoIdSel
-                            );
-                    }
-                }
-            }
-        }
-
-        if (!videoId) {
-            videoId = @"unknown";
-        }
-
-        id tvStreamingData =
-            YTCreateTVStreamingData(
-                videoId
-            );
-
-        if (tvStreamingData) {
-
-            %orig(tvStreamingData);
+        if (replacement) {
+            %orig(replacement);
             return;
         }
     }
 
-    %orig;
+    %orig(streamingData);
 }
+
 
 - (id)streamingData
 {
-    id original =
-        %orig;
+    id original = %orig;
 
-    if (YTPlaybackFixSpoofEnabled()) {
+    if (!YTPlaybackFixSpoofEnabled()) {
+        return original;
+    }
 
-        BOOL hasAdaptiveFormats =
-            NO;
+    /*
+     * Recover the video ID from the player response.
+     * We deliberately use objc_msgSend helpers because
+     * YTPlayerResponse is only forward-declared here.
+     */
 
-        if (original &&
-            [original
-                respondsToSelector:
-                    @selector(
-                        adaptiveFormatsArray)]) {
+    NSString *videoId =
+        YTGetVideoIdFromPlayerResponse(self);
 
-            NSArray *formats =
-                [original
-                    adaptiveFormatsArray];
+    if (videoId.length > 0) {
 
-            hasAdaptiveFormats =
-                formats.count > 0;
-        }
+        id replacement =
+            YTCreateTVStreamingData(videoId);
 
-        if (!original ||
-            !hasAdaptiveFormats) {
-
-            id replacement =
-                YTCreateTVStreamingData(
-                    @"unknown"
-                );
-
-            if (replacement) {
-                return replacement;
-            }
+        if (replacement) {
+            return replacement;
         }
     }
 
@@ -1699,7 +1686,6 @@ willPerformHTTPRedirection:(id)response
 }
 
 %end
-
 
 // ============================================================================
 // YTIStreamingData
